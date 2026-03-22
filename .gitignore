@@ -1,0 +1,7 @@
+build/
+assets/raw/
+assets/atlas/
+imgui.ini
+*.o
+*.a
+*.so

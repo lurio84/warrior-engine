@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "tile_size": 32,
+  "tick_hz": 50,
+  "map": { "width_tiles": 128, "height_tiles": 128 },
+  "camera": {
+    "zoom_levels": [0.5, 1.0, 2.0],
+    "zoom_default": 1.0,
+    "clamp_to_map": true
+  },
+  "saves": {
+    "slots": 3,
+    "autosave_interval_ticks": 15000
+  },
+  "debug": {
+    "imgui_enabled": true,
+    "show_tile_grid": false,
+    "show_entity_bounds": false
+  }
+}
