@@ -6,6 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 // ── Shaders ───────────────────────────────────────────────────────────────────
 
@@ -37,7 +38,10 @@ in  vec2 v_local_uv;
 out vec4 frag_color;
 
 void main() {
-    vec2 scrolled  = fract(v_local_uv * u_repeat - u_scroll * u_time);
+    vec2 uv_raw   = v_local_uv * u_repeat - u_scroll * u_time;
+    // fract solo cuando hay scroll activo; evita discontinuidad en bordes de tiles
+    bool scrolling = (u_scroll.x + u_scroll.y) > 0.0;
+    vec2 scrolled  = scrolling ? fract(uv_raw) : clamp(uv_raw, 0.0, 1.0);
     vec2 atlas_uv  = mix(u_uv_rect.xy, u_uv_rect.zw, scrolled);
     frag_color     = texture(u_texture, atlas_uv) * u_color;
 }
@@ -121,6 +125,10 @@ void Renderer::begin_frame(int vp_w, int vp_h,
                             float zoom) {
     glViewport(0, 0, vp_w, vp_h);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    zoom_ = zoom;
+    vp_w_ = vp_w;
+    vp_h_ = vp_h;
 
     float half_w = (vp_w * 0.5f) / (TILE_SIZE_PX * zoom);
     float half_h = (vp_h * 0.5f) / (TILE_SIZE_PX * zoom);
@@ -224,8 +232,13 @@ void Renderer::draw_registry(entt::registry& reg) {
         glUniform2f(u_repeat_, (float)sp.size_w, (float)sp.size_h);
 
         // ── Model matrix ──────────────────────────────────────────────────────
+        // Snap posición al grid de píxeles para evitar jitter sub-pixel
+        float px_scale = TILE_SIZE_PX * zoom_;
+        float snap_x   = std::round(tf.x * px_scale) / px_scale;
+        float snap_y   = std::round(tf.y * px_scale) / px_scale;
+
         glm::mat4 model{1.f};
-        model = glm::translate(model, glm::vec3(tf.x, tf.y, 0.f));
+        model = glm::translate(model, glm::vec3(snap_x, snap_y, 0.f));
         model = glm::rotate(model, tf.rotation, glm::vec3(0.f, 0.f, 1.f));
         model = glm::scale(model, glm::vec3(
             sp.size_w * tf.scale_x,

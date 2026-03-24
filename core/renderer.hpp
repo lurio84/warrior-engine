@@ -45,6 +45,9 @@ private:
     glm::mat4 view_proj_{1.f};
     Atlas*    atlas_ = nullptr;
     float     time_  = 0.f;
+    float     zoom_  = 1.f;    // guardado desde begin_frame para pixel-snap
+    int       vp_w_  = 0;
+    int       vp_h_  = 0;
 
     static GLuint compile_shader(GLenum type, const char* src);
     static GLuint link_program(GLuint vert, GLuint frag);

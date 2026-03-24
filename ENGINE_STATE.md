@@ -1,7 +1,8 @@
-# Engine state — The Warrior's Way
+# Engine State — The Warrior's Way
 
 ## Fase actual
-**Fase 10 completa — Motor base terminado**
+**Fase 13 — C++ puro, sin Lua**
+Motor base completo. Gameplay en sistemas C++/EnTT. Demo: drill animado → cinta → cofre.
 
 ---
 
@@ -13,23 +14,57 @@
 | GLM | 1.0.1 | Matemáticas |
 | GLAD | 0.1.36 | OpenGL 4.5 core loader |
 | stb_image | master | Carga de PNG para el atlas |
-| sol2 | 3.3.0 | Binding C++ → LuaJIT |
-| LuaJIT | sistema | VM de scripts |
-| efsw | 1.4.0 | File watcher (hot-reload) |
-| nlohmann/json | 3.11.3 | Parsing de atlas.json |
+| efsw | 1.4.0 | File watcher (hot-reload shaders/atlas) |
+| nlohmann/json | 3.11.3 | Parsing de atlas.json y tilemap |
 | miniaudio | 0.11.21 | Audio (WAV/OGG/FLAC) |
 | Dear ImGui | 1.91.0 | Debug UI en runtime |
 | ENet | 1.3.17 | Multiplayer UDP fiable |
 
 ---
 
+## Estructura de directorios
+```
+/warrior-engine
+  /core           — motor: renderer, atlas, audio, input, camera, debug_ui, network, tilemap
+    main.cpp      — game loop, eventos SDL, timestep 50 Hz
+    game_scene.hpp — init de la escena (reemplaza main.lua)
+    components.hpp — todos los componentes ECS
+  /systems        — un archivo por sistema de gameplay (header-only inline)
+    drill_system.hpp
+    item_system.hpp
+    conveyor_system.hpp
+    machine_system.hpp
+    player_system.hpp
+  /assets
+    /raw          — sprites fuente
+    /sprites      — PNGs generados
+    /atlas        — atlas.png + atlas.json (output del pipeline)
+    /shaders      — GLSL (hot-reload por efsw)
+    /sounds       — WAV de prueba
+    /maps         — JSON de tilemaps
+  /game
+    /entities     — JSON de definiciones (stats, sprites, sonidos)
+    /levels       — JSON de mapas
+    /saves        — JSON de partidas
+  /tools
+    gen_test_sprites.py
+    build_atlas.py
+    gen_test_sounds.py
+  CMakeLists.txt
+  SYSTEMS_REGISTRY.md
+  ENGINE_STATE.md
+  engine_config.json
+```
+
+---
+
 ## Archivos del core C++
 | Archivo | Responsabilidad |
 |---|---|
-| `main.cpp` | Loop principal, eventos SDL, timestep fijo 50 Hz |
+| `main.cpp` | Loop principal, eventos SDL, timestep fijo 50 Hz, llama sistemas |
+| `game_scene.hpp` | Inicialización de la escena (drill + belt + box + player) |
 | `renderer.hpp/.cpp` | Draw calls OpenGL DSA, atlas UV, UV scroll animado |
-| `lua_vm.hpp/.cpp` | VM LuaJIT + todos los bindings `engine.*` |
-| `file_watcher.hpp/.cpp` | efsw, detecta cambios en `scripts/` |
+| `file_watcher.hpp/.cpp` | efsw, detecta cambios en `assets/shaders/` |
 | `atlas.hpp/.cpp` | Carga atlas.png + atlas.json, provee UV rects |
 | `stb_impl.cpp` | Implementación única de stb_image |
 | `audio.hpp/.cpp` | miniaudio: load/play/stop/volume |
@@ -38,53 +73,31 @@
 | `input.hpp` | InputSystem: snapshot teclado por frame |
 | `debug_ui.hpp/.cpp` | Panels ImGui: perf, cámara, audio, entidades, red |
 | `network.hpp/.cpp` | NetworkManager ENet: host/join, sync jugadores |
-| `components.hpp` | Transform, SpriteRef, Velocity, NetworkPlayer |
+| `tilemap.hpp/.cpp` | Tilemap: load JSON, get/set tiles, draw |
+| `components.hpp` | Todos los componentes ECS |
 
 ---
 
 ## Componentes ECS
 ```cpp
-Transform    { x, y, rotation, scale_x, scale_y }
-SpriteRef    { sprite_id, tint, size_w, size_h, scroll_x, scroll_y }
-Velocity     { vx, vy }          // tiles/segundo, aplicado por C++ cada tick
-NetworkPlayer{ peer_id, is_local }
+Transform     { x, y, rotation, scale_x, scale_y }
+SpriteRef     { sprite_id, tint, size_w, size_h, scroll_x, scroll_y, layer }
+Velocity      { vx, vy }             // tiles/segundo, aplicado por physics cada tick
+NetworkPlayer { peer_id, is_local }
+ConveyorTag   { speed, direction }   // marca entidad de cinta
+DrillTag      { anim_t, frame, spawn_timer, dest_x, belt_speed }
+ItemTag       { item_type, quantity, age, popping, source_x, dest_x, belt_speed }
+MachineTag    { type, progress, recipe_id }
+PlayerTag     { speed }
 ```
 
 ---
 
-## API Lua completa
-```lua
--- Constantes
-engine.TILE_SIZE                              -- 32 px
+## Sistemas (SYSTEMS_REGISTRY.md)
+Ver `SYSTEMS_REGISTRY.md` para orden de ejecución completo y propietario de cada componente.
 
--- Log
-engine.log(msg)
-
--- Entidades
-engine.entity.create()           -> id
-engine.entity.destroy(id)
-engine.entity.set_pos(id, x, y)
-engine.entity.get_pos(id)        -> x, y
-engine.entity.set_rotation(id, radians)
-engine.entity.set_color(id, r, g, b, a)
-engine.entity.set_size(id, w, h)
-engine.entity.set_sprite(id, sprite_id)
-engine.entity.set_scroll(id, sx, sy)          -- UV scroll cycles/sec
-engine.entity.set_velocity(id, vx, vy)        -- tiles/segundo
-engine.entity.get_velocity(id)   -> vx, vy
-engine.entity.stop(id)                        -- vx = vy = 0
-
--- Input (snapshot por frame)
-engine.input.down("w")           -> bool      -- tecla mantenida
-engine.input.pressed("space")    -> bool      -- flanco de subida
-
--- Audio
-engine.audio.play(id)
-engine.audio.stop(id)
-engine.audio.volume(0..1)                     -- master volume
-
--- Hook de juego (definir en el script)
-function update(dt) end                       -- llamado 50 veces/seg
+```
+player_system → conveyor_system → drill_system → item_system → physics → render
 ```
 
 ---
@@ -93,11 +106,11 @@ function update(dt) end                       -- llamado 50 veces/seg
 | Tecla | Acción |
 |---|---|
 | Flechas | Pan de cámara |
-| `+` / `-` | Zoom: 0.5× → 1× → 2× |
+| `+` / `-` | Zoom: 0.5× → 1× → 2× → 3× → 4× |
 | `0` | Reset zoom |
 | `F1` | Toggle debug UI |
+| `WASD` | Mueve jugador (smooth, via player_system) |
 | `ESC` | Salir |
-| `WASD` | Mueve jugador de red (NetworkManager) |
 
 ---
 
@@ -105,9 +118,10 @@ function update(dt) end                       -- llamado 50 veces/seg
 ```
 assets/raw/*.png
       ↓
+tools/gen_test_sprites.py  → genera PNGs de prueba en assets/sprites/
 tools/build_atlas.py       → assets/atlas/atlas.png + atlas.json
-tools/gen_test_sprites.py  → genera PNGs de prueba
-tools/gen_test_sounds.py   → genera WAVs de prueba
+cp -r assets/atlas build/assets/
+cmake --build build
 ```
 - Atlas: potencia de 2, packing por filas, UV en [0,1] con Y-up (stbi flip)
 - Sprite IDs: `snake_case` — nunca renombrar una vez en un save
@@ -115,11 +129,9 @@ tools/gen_test_sounds.py   → genera WAVs de prueba
 ---
 
 ## Sistema de red (ENet)
-- `--host [puerto]` → modo servidor (peer_id=0, spawn x=4,y=7)
-- `--join <ip> [puerto]` → modo cliente (peer_id=1, spawn x=10,y=7)
+- `--host [puerto]` → modo servidor (peer_id=0)
+- `--join <ip> [puerto]` → modo cliente (peer_id=1)
 - Puerto por defecto: 7777
-- Jugador local: tint blanco. Jugador remoto: tint naranja
-- Protocolo: PKT_WELCOME / PKT_JOIN / PKT_LEAVE / PKT_MOVE (todos reliable)
 
 ---
 
@@ -128,13 +140,13 @@ tools/gen_test_sounds.py   → genera WAVs de prueba
 - Tile size: 32 px (inmutable — `Renderer::TILE_SIZE_PX`)
 - Tick rate: 50 Hz (20 ms/tick)
 - Coordenadas: tiles en lógica, píxeles solo en renderer
-- Todo el gameplay se escribe en `scripts/` — cero C++ para mecánicas
+- Todo el gameplay en `systems/` — sin scripting externo
 
 ---
 
-## Próximos pasos (gameplay factory)
-1. **Tilemap desde archivo** — cargar mapa JSON/Tiled
-2. **Items en cinta** — entidades con Velocity que siguen la dirección de la cinta
-3. **Máquinas** — splitter, merger, crafter (lógica 100% Lua)
-4. **Pipeline AI sprites** — ComfyUI + FLUX.1 dev → `assets/raw/` automático
-5. **Save/load** — serializar registry a JSON
+## Próximos pasos
+1. **Feedback al recolectar** — animación/sonido cuando item_pickup llega al cofre
+2. **Cámara siguiendo al jugador** — camera_system que sigue al PlayerTag
+3. **Segunda máquina** — processor: iron_ore → iron_ingot (machine_system activo)
+4. **UI in-world** — contador de recursos sobre el cofre
+5. **Colocación dinámica** — el jugador puede poner cintas y máquinas

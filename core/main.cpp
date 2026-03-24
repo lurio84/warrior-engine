@@ -1,5 +1,4 @@
-// The Warrior's Way Engine — Phase 3: Lua VM
-// Entities are now created by scripts/main.lua, not hardcoded C++.
+// The Warrior's Way Engine — Phase 13: Pure C++ gameplay (no Lua)
 
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
@@ -7,7 +6,6 @@
 
 #include "components.hpp"
 #include "renderer.hpp"
-#include "lua_vm.hpp"
 #include "file_watcher.hpp"
 #include "atlas.hpp"
 #include "audio.hpp"
@@ -16,6 +14,16 @@
 #include "network.hpp"
 #include "input.hpp"
 #include "tilemap.hpp"
+#include "placement_grid.hpp"
+#include "game_scene.hpp"
+
+#include "drill_system.hpp"
+#include "item_system.hpp"
+#include "conveyor_system.hpp"
+#include "machine_system.hpp"
+#include "player_system.hpp"
+#include "camera_system.hpp"
+#include "placement_system.hpp"
 
 #include <iostream>
 #include <cstdlib>
@@ -27,11 +35,11 @@ static constexpr double TICK_SECONDS = 1.0 / TICK_HZ;  // 20 ms
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 int main(int argc, char* argv[]) {
-    // ── Argumentos de red ────────────────────────────────────────────────────
-    bool        net_host_mode   = false;
-    bool        net_join_mode   = false;
+    // ── Argumentos de red ─────────────────────────────────────────────────────
+    bool        net_host_mode = false;
+    bool        net_join_mode = false;
     std::string net_join_ip;
-    uint16_t    net_port        = 7777;
+    uint16_t    net_port      = 7777;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -46,6 +54,7 @@ int main(int argc, char* argv[]) {
                 net_port = (uint16_t)std::stoi(argv[++i]);
         }
     }
+
     // ── SDL init ──────────────────────────────────────────────────────────────
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         std::cerr << "SDL_Init: " << SDL_GetError() << "\n";
@@ -58,14 +67,11 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,   0);
 
-    // Abrir en display 1 si existe, si no en display 0
-    // DP-4 está en x=0..3071, HDMI-0 en x=3072..6143 (según xrandr)
-    // Posicionamos en DP-4 sin maximize para que el WM no la mueva
-    int vp_w = 3072, vp_h = 1728;  // DP-4 resolución completa
-    int win_x = 0, win_y = 0;      // esquina superior izquierda de DP-4
+    int vp_w = 3072, vp_h = 1728;
+    int win_x = 0,   win_y = 0;
 
     SDL_Window* window = SDL_CreateWindow(
-        "The Warrior's Way Engine | Phase 11: Tilemap",
+        "The Warrior's Way Engine | Phase 13: Pure C++",
         win_x, win_y, vp_w, vp_h,
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
@@ -87,7 +93,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "OpenGL " << glGetString(GL_VERSION)
               << "  |  " << glGetString(GL_RENDERER) << "\n"
-              << "Controles: flechas=pan  +/-=zoom  0=reset  ESC=salir\n";
+              << "Controles: flechas=pan  +/-=zoom  0=reset  F1=debug  ESC=salir\n";
 
     SDL_GL_SetSwapInterval(1);
     glClearColor(0.05f, 0.05f, 0.08f, 1.f);
@@ -96,16 +102,14 @@ int main(int argc, char* argv[]) {
     DebugUI debug_ui;
     debug_ui.init(window, gl_ctx);
 
-    // ── ECS + renderer + Lua VM ───────────────────────────────────────────────
+    // ── ECS + renderer ────────────────────────────────────────────────────────
     entt::registry reg;
 
     Renderer renderer;
     renderer.init();
 
-    // Assets desde el build, scripts siempre desde el fuente (evita copias rancias)
-    char* base_path  = SDL_GetBasePath();
-    std::string base_dir    = std::string(base_path);
-    std::string scripts_dir = std::string(ENGINE_SOURCE_DIR) + "/scripts/";
+    char* base_path = SDL_GetBasePath();
+    std::string base_dir = std::string(base_path);
     SDL_free(base_path);
 
     // ── Atlas ─────────────────────────────────────────────────────────────────
@@ -124,28 +128,29 @@ int main(int argc, char* argv[]) {
     InputSystem input;
     TileMap tilemap;
     Camera cam;
+    PlacementGrid grid;
+    BuildState build;
 
-    LuaVM lua_vm;
-    lua_vm.init(reg, audio, input, tilemap, cam);
-    lua_vm.exec_file(scripts_dir + "main.lua");  // populates the registry
+    // ── Scene init (replaces main.lua) ────────────────────────────────────────
+    SceneState scene = init_scene(reg, tilemap, cam, grid, base_dir);
 
     // ── Red ───────────────────────────────────────────────────────────────────
     NetworkManager net;
     net.init();
-    if (net_host_mode)       net.host(net_port);
-    else if (net_join_mode)  net.join(net_join_ip, net_port);
+    if (net_host_mode)      net.host(net_port);
+    else if (net_join_mode) net.join(net_join_ip, net_port);
 
-    // ── File Watcher (hot-reload) ─────────────────────────────────────────────
-    std::string src_scripts_dir = std::string(ENGINE_SOURCE_DIR) + "/scripts/";
+    // ── File Watcher (hot-reload de shaders/atlas) ────────────────────────────
+    std::string shaders_dir = std::string(ENGINE_SOURCE_DIR) + "/assets/shaders/";
     FileWatcher fw;
-    fw.watch(src_scripts_dir);
+    fw.watch(shaders_dir);
 
     // ── Fixed-timestep loop ───────────────────────────────────────────────────
     uint64_t prev_ticks = SDL_GetTicks64();
     double   accumulator = 0.0;
     double   total_time  = 0.0;
     float    fps         = 0.f;
-    bool     running = true;
+    bool     running     = true;
     SDL_Event event;
 
     while (running) {
@@ -169,19 +174,6 @@ int main(int argc, char* argv[]) {
                         case SDLK_MINUS:
                         case SDLK_KP_MINUS: cam.zoom_out();     break;
                         case SDLK_0:        cam.zoom_reset();   break;
-                        // ── WASD: mueve el jugador local ──────────────────
-                        case SDLK_w: case SDLK_a: case SDLK_s: case SDLK_d: {
-                            entt::entity lp = net.local_player();
-                            if (reg.valid(lp)) {
-                                auto& tf = reg.get<components::Transform>(lp);
-                                if (event.key.keysym.sym == SDLK_w) tf.y += 1.f;
-                                if (event.key.keysym.sym == SDLK_s) tf.y -= 1.f;
-                                if (event.key.keysym.sym == SDLK_a) tf.x -= 1.f;
-                                if (event.key.keysym.sym == SDLK_d) tf.x += 1.f;
-                                net.send_move((int16_t)tf.x, (int16_t)tf.y);
-                            }
-                            break;
-                        }
                     }
                     break;
                 case SDL_WINDOWEVENT:
@@ -193,22 +185,19 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // ── Hot-reload ────────────────────────────────────────────────────────
+        // ── Hot-reload (shaders/atlas) ────────────────────────────────────────
         fw.poll([&](const std::string& path) {
-            if (path.ends_with(".lua")) {
-                std::cout << "[Hot-reload] " << path << "\n";
-                reg.clear();
-                tilemap.clear();
-                lua_vm.exec_file(path);
-                net.on_registry_cleared(reg);
-            }
+            std::cout << "[Hot-reload] " << path << "\n";
         });
 
         // ── Red ───────────────────────────────────────────────────────────────
         net.tick(reg);
 
-        // ── Input snapshot (una vez por frame) ────────────────────────────────
+        // ── Input snapshot ────────────────────────────────────────────────────
         input.update();
+
+        // ── Placement (una vez por frame, fuera del tick fijo) ────────────────
+        placement_system(reg, grid, cam, input, build, vp_w, vp_h);
 
         // ── Fixed-timestep logic at 50 Hz ─────────────────────────────────────
         uint64_t now   = SDL_GetTicks64();
@@ -218,13 +207,48 @@ int main(int argc, char* argv[]) {
         fps = (delta > 0.0) ? static_cast<float>(1.0 / delta) : 0.f;
 
         while (accumulator >= TICK_SECONDS) {
-            lua_vm.tick(TICK_SECONDS);
-            // ── Physics: aplicar velocidad a posición ─────────────────────────
+            float dt = static_cast<float>(TICK_SECONDS);
+
+            // ── Gameplay systems (order matters — see SYSTEMS_REGISTRY.md) ────
+            player_system(reg, input);
+            conveyor_system(reg, dt);
+            drill_system(reg, dt);
+            scene.collected += item_system(reg, dt);
+            // machine_system(reg, dt);  // stub — no processors yet
+
+            // ── Physics: apply velocity → position ───────────────────────────
             for (auto [e, tf, v] : reg.view<components::Transform,
                                             components::Velocity>().each()) {
-                tf.x += v.vx * (float)TICK_SECONDS;
-                tf.y += v.vy * (float)TICK_SECONDS;
+                if (!reg.all_of<components::PlayerTag>(e)) {
+                    tf.x += v.vx * dt;
+                    tf.y += v.vy * dt;
+                } else {
+                    // Jugador: colisión por eje (permite deslizamiento)
+                    constexpr float HALF = 0.42f;
+                    auto solid = [&](float px, float py) {
+                        int corners[4][2] = {
+                            { PlacementGrid::to_tile(px - HALF), PlacementGrid::to_tile(py - HALF) },
+                            { PlacementGrid::to_tile(px + HALF), PlacementGrid::to_tile(py - HALF) },
+                            { PlacementGrid::to_tile(px - HALF), PlacementGrid::to_tile(py + HALF) },
+                            { PlacementGrid::to_tile(px + HALF), PlacementGrid::to_tile(py + HALF) },
+                        };
+                        for (auto& c : corners) {
+                            auto ent = grid.get(c[0], c[1]);
+                            if (ent != entt::null && reg.all_of<components::SolidTag>(ent))
+                                return true;
+                        }
+                        return false;
+                    };
+                    float nx = tf.x + v.vx * dt;
+                    float ny = tf.y + v.vy * dt;
+                    if (!solid(nx, tf.y)) tf.x = nx;
+                    if (!solid(tf.x, ny)) tf.y = ny;
+                }
             }
+
+            // ── Camera sigue al jugador ───────────────────────────────────────
+            camera_system(reg, cam, dt);
+
             total_time  += TICK_SECONDS;
             accumulator -= TICK_SECONDS;
         }
@@ -232,7 +256,7 @@ int main(int argc, char* argv[]) {
         // ── Render ────────────────────────────────────────────────────────────
         renderer.set_time(static_cast<float>(total_time));
         renderer.begin_frame(vp_w, vp_h, cam.x, cam.y, cam.zoom);
-        renderer.draw_tilemap(tilemap);   // fondo primero
+        renderer.draw_tilemap(tilemap);
         renderer.draw_registry(reg);
 
         debug_ui.begin_frame();
@@ -245,7 +269,6 @@ int main(int argc, char* argv[]) {
     // ── Cleanup ───────────────────────────────────────────────────────────────
     net.shutdown();
     debug_ui.shutdown();
-    lua_vm.shutdown();
     audio.shutdown();
     atlas.shutdown();
     renderer.shutdown();

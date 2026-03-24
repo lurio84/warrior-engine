@@ -10,10 +10,15 @@
 class InputSystem {
 public:
     void update() {
+        // Teclado
         std::memcpy(prev_, cur_, SDL_NUM_SCANCODES);
         int n = 0;
         const uint8_t* s = SDL_GetKeyboardState(&n);
         std::memcpy(cur_, s, n);
+
+        // Ratón
+        mouse_prev_ = mouse_cur_;
+        mouse_cur_  = SDL_GetMouseState(&mouse_x_, &mouse_y_);
     }
 
     // Tecla mantenida este frame
@@ -30,9 +35,24 @@ public:
         return sc != SDL_SCANCODE_UNKNOWN && cur_[sc] && !prev_[sc];
     }
 
+    // ── Ratón ─────────────────────────────────────────────────────────────────
+    std::pair<int,int> mouse_pos() const { return { mouse_x_, mouse_y_ }; }
+
+    // btn: SDL_BUTTON_LEFT (1), SDL_BUTTON_RIGHT (3), SDL_BUTTON_MIDDLE (2)
+    bool mouse_down(int btn)    const { return (mouse_cur_  & SDL_BUTTON(btn)) != 0; }
+    bool mouse_pressed(int btn) const {
+        return (mouse_cur_ & SDL_BUTTON(btn)) != 0
+            && (mouse_prev_ & SDL_BUTTON(btn)) == 0;
+    }
+
 private:
-    uint8_t cur_ [SDL_NUM_SCANCODES]{};
-    uint8_t prev_[SDL_NUM_SCANCODES]{};
+    uint8_t  cur_ [SDL_NUM_SCANCODES]{};
+    uint8_t  prev_[SDL_NUM_SCANCODES]{};
+
+    uint32_t mouse_cur_  = 0;
+    uint32_t mouse_prev_ = 0;
+    int      mouse_x_    = 0;
+    int      mouse_y_    = 0;
 
     // Alias cortos que SDL no reconoce por nombre
     static SDL_Scancode alias(const std::string& n) {

@@ -88,21 +88,6 @@ FetchContent_Declare(
 set(EFSW_BUILD_TEST_APP OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(efsw)
 
-# ── LuaJIT (system package: sudo apt install libluajit-5.1-dev) ───────────────
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LUAJIT REQUIRED luajit)
-
-# ── sol2 (header-only C++ → Lua binding) ─────────────────────────────────────
-FetchContent_Declare(
-    sol2
-    GIT_REPOSITORY https://github.com/ThePhD/sol2.git
-    GIT_TAG        v3.3.0
-    GIT_SHALLOW    TRUE
-)
-set(SOL2_BUILD_LUA    FALSE CACHE BOOL "" FORCE)
-set(SOL2_ENABLE_INSTALL FALSE CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(sol2)
-
 # ── miniaudio (header-only) ───────────────────────────────────────────────────
 FetchContent_Declare(
     miniaudio
@@ -162,7 +147,6 @@ target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static)
 add_executable(warrior_engine
     core/main.cpp
     core/renderer.cpp
-    core/lua_vm.cpp
     core/file_watcher.cpp
     core/atlas.cpp
     core/stb_impl.cpp
@@ -175,7 +159,7 @@ add_executable(warrior_engine
 
 target_include_directories(warrior_engine PRIVATE
     core
-    ${LUAJIT_INCLUDE_DIRS}
+    systems
 )
 
 target_link_libraries(warrior_engine PRIVATE
@@ -184,13 +168,11 @@ target_link_libraries(warrior_engine PRIVATE
     glm::glm
     stb_image
     glad
-    sol2
     efsw
     nlohmann_json::nlohmann_json
     miniaudio_iface
     imgui_lib
     enet_lib
-    ${LUAJIT_LIBRARIES}
 )
 
 # Embed source dir so the FileWatcher can watch the real scripts/ folder
@@ -207,8 +189,6 @@ endif()
 add_custom_command(TARGET warrior_engine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:warrior_engine>/assets
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/scripts $<TARGET_FILE_DIR:warrior_engine>/scripts
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/game $<TARGET_FILE_DIR:warrior_engine>/game
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
