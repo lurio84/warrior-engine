@@ -113,15 +113,8 @@ inline void refresh_belt_sprite(entt::registry& reg,
     sr.sprite_id = vis.sprite;
     auto& tf     = reg.get<components::Transform>(e);
     tf.rotation  = vis.rotation;
-    // Las esquinas usan scroll diagonal para simular movimiento a lo largo de la curva
-    if (vis.sprite == "conveyor_belt_idle") {
-        sr.scroll_x = ctag.speed;
-        sr.scroll_y = 0.f;
-    } else {
-        // scroll en X local (el sprite ya está rotado, X apunta en dirección de salida)
-        sr.scroll_x = ctag.speed;
-        sr.scroll_y = 0.f;
-    }
+    sr.scroll_x = (vis.sprite == "conveyor_belt_idle") ? ctag.speed : 0.f;
+    sr.scroll_y = 0.f;
 }
 
 // ── refresh_belt_area ─────────────────────────────────────────────────────────
