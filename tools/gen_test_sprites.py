@@ -278,13 +278,114 @@ def make_drill_5(): return make_drill_frame(135)
 def make_drill_6(): return make_drill_frame(90)
 def make_drill_7(): return make_drill_frame(45)
 
+# ── conveyor_corner_cw — giro derecha, base: entrada N → salida E ────────────
+# El brazo horizontal (derecho) y el brazo vertical (abajo) comparten el mismo
+# lenguaje visual que conveyor_belt_idle. Fondo transparente → suelo visible.
+# Rotaciones: N→E (0°), E→S (-90°), S→W (180°), W→N (90°)
+def make_conveyor_corner_cw():
+    TRANS = (0, 0, 0, 0)
+    BASE  = (55, 52, 48, 255)
+    RAIL  = (38, 36, 33, 255)
+    BELT  = (70, 66, 60, 255)
+    ARROW = (140, 130, 50, 255)
+
+    img = Image.new("RGBA", (S, S), TRANS)
+    d   = ImageDraw.Draw(img)
+
+    H = S // 2  # 16
+
+    # ── Brazo derecho (salida Este): mitad derecha del tile, altura completa ──
+    d.rectangle([H, 0, S-1, S-1],   fill=BASE)
+    d.rectangle([H, 0, S-1, 3],     fill=RAIL)   # riel superior
+    d.rectangle([H, 4, S-1, S-5],   fill=BELT)   # superficie
+    d.rectangle([H, S-4, S-1, S-1], fill=RAIL)   # riel inferior
+
+    # ── Brazo inferior (entrada N→sube): mitad inferior izquierda ─────────────
+    d.rectangle([0, H, H-1, S-1],   fill=BASE)
+    d.rectangle([0, H, 3, S-1],     fill=RAIL)   # riel izquierdo
+    d.rectangle([4, H, H-1, S-1],   fill=BELT)   # superficie
+    # (no hay riel derecho — conecta con el brazo derecho en x=H)
+
+    # ── Unión central (cuadrante inferior derecho) → superficie limpia ────────
+    d.rectangle([H, H, S-1, S-1], fill=BELT)
+
+    # ── Flecha: tramo vertical hacia arriba + curva + tramo horizontal ─────────
+    mx = H - 4  # centro del brazo vertical (x)
+    my = H + 4  # centro del brazo horizontal (y)
+    # tramo vertical (subiendo desde abajo)
+    for y in range(my + 2, S - 2):
+        for dx in range(2):
+            img.putpixel((mx + dx, y), ARROW)
+    # curva de conexión
+    for i in range(6):
+        for dxy in range(2):
+            x2 = mx + i + dxy
+            y2 = my - i + dxy
+            if 0 <= x2 < S and 0 <= y2 < S:
+                img.putpixel((x2, y2), ARROW)
+    # tramo horizontal (saliendo a la derecha)
+    for x in range(mx + 5, S - 2):
+        for dy in range(2):
+            img.putpixel((x, my - 5 + dy), ARROW)
+
+    return img
+
+# ── conveyor_corner_ccw — giro izquierda, base: entrada N → salida W ─────────
+# Rotaciones: N→W (0°), W→S (-90°), S→E (180°), E→N (90°)
+def make_conveyor_corner_ccw():
+    TRANS = (0, 0, 0, 0)
+    BASE  = (55, 52, 48, 255)
+    RAIL  = (38, 36, 33, 255)
+    BELT  = (70, 66, 60, 255)
+    ARROW = (140, 130, 50, 255)
+
+    img = Image.new("RGBA", (S, S), TRANS)
+    d   = ImageDraw.Draw(img)
+
+    H = S // 2  # 16
+
+    # ── Brazo izquierdo (salida Oeste): mitad izquierda, altura completa ──────
+    d.rectangle([0, 0, H-1, S-1],   fill=BASE)
+    d.rectangle([0, 0, H-1, 3],     fill=RAIL)   # riel superior
+    d.rectangle([0, 4, H-1, S-5],   fill=BELT)   # superficie
+    d.rectangle([0, S-4, H-1, S-1], fill=RAIL)   # riel inferior
+
+    # ── Brazo inferior (entrada N→sube): mitad inferior derecha ───────────────
+    d.rectangle([H, H, S-1, S-1],   fill=BASE)
+    d.rectangle([S-4, H, S-1, S-1], fill=RAIL)   # riel derecho
+    d.rectangle([H, H, S-5, S-1],   fill=BELT)   # superficie
+
+    # ── Unión central (cuadrante inferior izquierdo) ──────────────────────────
+    d.rectangle([0, H, H-1, S-1], fill=BELT)
+
+    # ── Flecha: tramo vertical + curva + tramo horizontal ─────────────────────
+    mx = H + 4  # centro del brazo vertical (x)
+    my = H + 4  # centro del brazo horizontal (y)
+    for y in range(my + 2, S - 2):
+        for dx in range(2):
+            img.putpixel((mx - dx, y), ARROW)
+    for i in range(6):
+        for dxy in range(2):
+            x2 = mx - i - dxy
+            y2 = my - i + dxy
+            if 0 <= x2 < S and 0 <= y2 < S:
+                img.putpixel((x2, y2), ARROW)
+    for x in range(2, mx - 5):
+        for dy in range(2):
+            img.putpixel((x, my - 5 + dy), ARROW)
+
+    return img
+
+
 print("Generando sprites procedurales en assets/raw/:")
-save(make_floor_tile(),         "floor_tile.png")
-save(make_wall_tile(),          "wall_tile.png")
-save(make_conveyor_belt_idle(), "conveyor_belt_idle.png")
-save(make_player(),             "player.png")
-save(make_item_box(),           "item_box.png")
-save(make_item(),               "item.png")
+save(make_floor_tile(),          "floor_tile.png")
+save(make_wall_tile(),           "wall_tile.png")
+save(make_conveyor_belt_idle(),  "conveyor_belt_idle.png")
+save(make_conveyor_corner_cw(),  "conveyor_corner_cw.png")
+save(make_conveyor_corner_ccw(), "conveyor_corner_ccw.png")
+save(make_player(),              "player.png")
+save(make_item_box(),            "item_box.png")
+save(make_item(),                "item.png")
 for i, fn in enumerate([make_drill_0, make_drill_1, make_drill_2, make_drill_3,
                          make_drill_4, make_drill_5, make_drill_6, make_drill_7]):
     save(fn(), f"drill_{i}.png")

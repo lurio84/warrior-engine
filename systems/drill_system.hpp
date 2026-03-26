@@ -19,6 +19,8 @@ inline void drill_system(entt::registry& reg, float dt) {
                          components::DrillTag>();
 
     for (auto [entity, tf, sr, drill] : view.each()) {
+        if (!drill.active) continue;
+
         // ── Frame animation ───────────────────────────────────────────────
         drill.anim_t += dt;
         if (drill.anim_t >= DRILL_FRAME_TIME) {
@@ -52,7 +54,9 @@ inline void drill_system(entt::registry& reg, float dt) {
 
             auto& itag       = reg.emplace<components::ItemTag>(item);
             itag.source_x    = tf.x;
+            itag.source_y    = tf.y;
             itag.dest_x      = drill.dest_x;
+            itag.dest_y      = drill.dest_y;
             itag.belt_speed  = drill.belt_speed;
         }
     }

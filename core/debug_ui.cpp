@@ -2,6 +2,8 @@
 #include "components.hpp"
 
 #include <imgui.h>
+#include <map>
+#include <string>
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_opengl3.h>
 #include <glad/glad.h>
@@ -67,7 +69,8 @@ void DebugUI::draw(entt::registry& reg, Camera& cam,
     if (ImGui::CollapsingHeader("Performance", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Text("FPS       : %.1f", fps);
         ImGui::Text("Tiempo    : %.1f s", total_time);
-        ImGui::Text("Entidades : %d", (int)reg.storage<entt::entity>().in_use());
+        ImGui::Text("Entidades : %d", (int)(reg.storage<entt::entity>().size()
+                                           - reg.storage<entt::entity>().free_list()));
     }
 
     // ── Cámara ────────────────────────────────────────────────────────────────
@@ -129,5 +132,26 @@ void DebugUI::draw(entt::registry& reg, Camera& cam,
         ImGui::EndTable();
     }
 
+    ImGui::End();
+}
+
+void DebugUI::draw_hud(const std::map<std::string, int>& inventory) {
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos({io.DisplaySize.x - 10.f, 10.f},
+                             ImGuiCond_Always, {1.f, 0.f});
+    ImGui::SetNextWindowBgAlpha(0.6f);
+    ImGui::Begin("##hud", nullptr,
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+        ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoMove);
+
+    ImGui::TextColored({1.f, 0.85f, 0.1f, 1.f}, "Recursos");
+    ImGui::Separator();
+    if (inventory.empty()) {
+        ImGui::TextDisabled("(ninguno)");
+    } else {
+        for (const auto& [type, count] : inventory)
+            ImGui::Text("%-16s %d", type.c_str(), count);
+    }
     ImGui::End();
 }

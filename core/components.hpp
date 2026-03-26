@@ -51,7 +51,7 @@ struct NetworkPlayer {
 // Marks a belt entity. Owner of Velocity writes is conveyor_system.
 struct ConveyorTag {
     float speed     = 1.5f;
-    int   direction = 0;    // 0=right, 1=down, 2=left, 3=up
+    int   direction = 0;    // 0=E, 1=N, 2=W, 3=S
 };
 
 // ── DrillTag ──────────────────────────────────────────────────────────────────
@@ -60,8 +60,10 @@ struct DrillTag {
     float anim_t      = 0.f;
     int   frame       = 0;
     float spawn_timer = 1.4f;   // pre-filled: 2.0 * 0.7 (first spawn sooner)
-    float dest_x      = 0.f;   // x position of the collection box
+    float dest_x      = 0.f;   // x of the collection box
+    float dest_y      = 0.f;   // y of the collection box
     float belt_speed  = 1.5f;
+    bool  active      = true;  // false if not connected to a box via belts
 };
 
 // ── ItemTag ───────────────────────────────────────────────────────────────────
@@ -72,7 +74,9 @@ struct ItemTag {
     float       age        = 0.f;
     bool        popping    = true;
     float       source_x   = 0.f;   // drill x (for layer promotion)
+    float       source_y   = 0.f;   // drill y
     float       dest_x     = 0.f;   // box x (collection point)
+    float       dest_y     = 0.f;   // box y
     float       belt_speed = 1.5f;
 };
 
@@ -89,6 +93,10 @@ struct MachineTag {
 struct PlayerTag {
     float speed = 5.0f;
 };
+
+// ── BoxTag ────────────────────────────────────────────────────────────────────
+// Marks a collection box. Items that reach this entity are collected.
+struct BoxTag {};
 
 // ── SolidTag ──────────────────────────────────────────────────────────────────
 // Marks an entity as colisionable. El jugador no puede atravesarlo.

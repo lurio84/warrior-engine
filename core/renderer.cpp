@@ -40,7 +40,7 @@ out vec4 frag_color;
 void main() {
     vec2 uv_raw   = v_local_uv * u_repeat - u_scroll * u_time;
     // fract solo cuando hay scroll activo; evita discontinuidad en bordes de tiles
-    bool scrolling = (u_scroll.x + u_scroll.y) > 0.0;
+    bool scrolling = dot(u_scroll, u_scroll) > 0.0;
     vec2 scrolled  = scrolling ? fract(uv_raw) : clamp(uv_raw, 0.0, 1.0);
     vec2 atlas_uv  = mix(u_uv_rect.xy, u_uv_rect.zw, scrolled);
     frag_color     = texture(u_texture, atlas_uv) * u_color;

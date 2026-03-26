@@ -4,6 +4,8 @@
 #include "camera.hpp"
 #include "audio.hpp"
 #include "network.hpp"
+#include <map>
+#include <string>
 
 // Debug UI — Phase 8
 // Panel ImGui activado con F1. Muestra entidades, cámara, audio y perf.
@@ -19,6 +21,7 @@ public:
     void begin_frame();
     void draw(entt::registry& reg, Camera& cam, Audio& audio,
               float fps, double total_time, const NetStats& net);
+    void draw_hud(const std::map<std::string, int>& inventory);
     void end_frame();
 
     bool visible = false;

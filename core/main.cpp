@@ -24,6 +24,7 @@
 #include "player_system.hpp"
 #include "camera_system.hpp"
 #include "placement_system.hpp"
+#include "placement_grid.hpp"
 
 #include <iostream>
 #include <cstdlib>
@@ -134,6 +135,15 @@ int main(int argc, char* argv[]) {
     // ── Scene init (replaces main.lua) ────────────────────────────────────────
     SceneState scene = init_scene(reg, tilemap, cam, grid, base_dir);
 
+    // Refrescar sprites de cintas iniciales (todas rectas, solo por consistencia)
+    {
+        auto view = reg.view<components::ConveyorTag, components::Transform>();
+        for (auto [e, ct, tf] : view.each())
+            refresh_belt_area(reg, grid,
+                              PlacementGrid::to_tile(tf.x),
+                              PlacementGrid::to_tile(tf.y));
+    }
+
     // ── Red ───────────────────────────────────────────────────────────────────
     NetworkManager net;
     net.init();
@@ -213,7 +223,7 @@ int main(int argc, char* argv[]) {
             player_system(reg, input);
             conveyor_system(reg, dt);
             drill_system(reg, dt);
-            scene.collected += item_system(reg, dt);
+            item_system(reg, dt, scene.inventory, grid);
             // machine_system(reg, dt);  // stub — no processors yet
 
             // ── Physics: apply velocity → position ───────────────────────────
@@ -261,6 +271,7 @@ int main(int argc, char* argv[]) {
 
         debug_ui.begin_frame();
         debug_ui.draw(reg, cam, audio, fps, total_time, net.stats());
+        debug_ui.draw_hud(scene.inventory);
         debug_ui.end_frame();
 
         SDL_GL_SwapWindow(window);

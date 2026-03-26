@@ -6,6 +6,7 @@
 #include "placement_grid.hpp"
 #include <string>
 #include <iostream>
+#include <map>
 
 // ── Scene state (owned by main) ───────────────────────────────────────────────
 struct SceneState {
@@ -13,7 +14,7 @@ struct SceneState {
     float drill_x    = 0.f;
     float box_x      = 0.f;
     float belt_speed = 1.5f;
-    int   collected  = 0;
+    std::map<std::string, int> inventory;
 };
 
 // ── Helper: create a sprite entity ───────────────────────────────────────────
@@ -57,32 +58,32 @@ inline SceneState init_scene(entt::registry& reg,
     sc.drill_x    = static_cast<float>(map_w / 2 - 6);
     sc.box_x      = sc.drill_x + 12.f;
 
-    float belt_w  = sc.box_x - sc.drill_x - 1.f;
-    float belt_cx = (sc.drill_x + sc.box_x) / 2.f;
-
     // ── Drill (layer 3, animated by drill_system) ─────────────────────────────
     auto drill_e = spawn_sprite(reg, sc.drill_x, sc.belt_y, "drill_0", 1, 1, 3);
     auto& dtag   = reg.emplace<components::DrillTag>(drill_e);
     dtag.dest_x      = sc.box_x;
+    dtag.dest_y      = sc.belt_y;
     dtag.belt_speed  = sc.belt_speed;
     dtag.spawn_timer = 1.4f;
     reg.emplace<components::SolidTag>(drill_e);
     grid.place(static_cast<int>(sc.drill_x), static_cast<int>(sc.belt_y), drill_e);
 
-    // ── Belt (layer 1, UV scroll) ─────────────────────────────────────────────
-    auto belt_e = spawn_sprite(reg, belt_cx, sc.belt_y,
-                               "conveyor_belt_idle",
-                               static_cast<int>(belt_w), 1, 1);
-    reg.get<components::SpriteRef>(belt_e).scroll_x = sc.belt_speed;
-    auto& ctag = reg.emplace<components::ConveyorTag>(belt_e);
-    ctag.speed = sc.belt_speed;
-    // La cinta ocupa varios tiles — registrar cada uno
-    for (int bx = static_cast<int>(sc.drill_x) + 1; bx < static_cast<int>(sc.box_x); ++bx)
-        grid.place(bx, static_cast<int>(sc.belt_y), belt_e);
+    // ── Belt: un tile por entidad (para que se puedan borrar individualmente) ─
+    for (int bx = static_cast<int>(sc.drill_x) + 1; bx < static_cast<int>(sc.box_x); ++bx) {
+        auto be = spawn_sprite(reg, static_cast<float>(bx), sc.belt_y,
+                               "conveyor_belt_idle", 1, 1, 1);
+        auto& sr_be   = reg.get<components::SpriteRef>(be);
+        sr_be.scroll_x = sc.belt_speed;
+        auto& ct      = reg.emplace<components::ConveyorTag>(be);
+        ct.speed      = sc.belt_speed;
+        ct.direction  = 0;  // Este
+        grid.place(bx, static_cast<int>(sc.belt_y), be);
+    }
 
     // ── Box (layer 2) ─────────────────────────────────────────────────────────
     auto box_e = spawn_sprite(reg, sc.box_x, sc.belt_y, "item_box", 1, 1, 2);
     reg.emplace<components::SolidTag>(box_e);
+    reg.emplace<components::BoxTag>(box_e);
     grid.place(static_cast<int>(sc.box_x), static_cast<int>(sc.belt_y), box_e);
 
     // ── Player (layer 10) ─────────────────────────────────────────────────────
