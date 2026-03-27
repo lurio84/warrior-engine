@@ -74,9 +74,27 @@ assets/maps/    — test.json (tilemap Tiled)
 - Sprites full-tile (ocupan el tile completo)
 - Colores diferenciados y legibles a zoom bajo
 
+## Estado actual de las esquinas de cinta
+
+**Problema pendiente (prioridad alta):** Las esquinas (`conveyor_corner_cw` / `conveyor_corner_ccw`) se
+ven desconectadas de las cintas rectas adyacentes. Causa:
+
+1. **Sin animación** — `scroll_x=0` (estáticas), mientras las cintas rectas animan.
+2. **No conectan visualmente** — los brazos de la esquina no alinean bien con los rieles
+   de la cinta recta (`RAIL` en y=0..3 y y=28..31 para entrada horizontal).
+
+**Solución a implementar:**
+- Rediseñar `make_conveyor_corner_cw/ccw` en `tools/gen_test_sprites.py`:
+  - Brazo horizontal: rieles en y=0..3 y y=28..31 exactamente igual que `conveyor_belt_idle`
+  - Brazo vertical: rieles en x=0..3 y x=28..31
+  - Zona interior: rellena con `BELT` (sin transparente) para continuidad visual
+  - Añadir chevron curvo en el interior de la esquina
+- Tras regenerar sprites: `python3 tools/gen_test_sprites.py && python3 tools/build_atlas.py && cp -r assets/atlas build/assets/`
+- Para animación futura: añadir frames de esquina o usar scroll diagonal
+
 ## Pendientes (por orden de prioridad)
-1. **Máquina procesadora** — `machine_system` real con recetas (hierro → lingotes)
-2. **Feedback pickup** — audio `item_pickup` ya cargado en `audio`
-3. **UI in-world** — contador sobre el cofre
-4. **Sprites IA** — máquinas estáticas generadas con ComfyUI + Flux en RTX 5070
-5. **Animación esquinas** — actualmente estáticas (scroll=0), mejorar si se añaden frames
+1. **Esquinas de cinta** — rediseñar sprite para que conecte con cintas rectas (ver sección anterior)
+2. **Máquina procesadora** — `machine_system` real con recetas (hierro → lingotes)
+3. **Feedback pickup** — audio `item_pickup` ya cargado en `audio`
+4. **UI in-world** — contador sobre el cofre
+5. **Sprites IA** — máquinas estáticas generadas con ComfyUI + Flux en RTX 5070
