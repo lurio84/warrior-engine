@@ -102,9 +102,23 @@ struct PlayerTag {
 // ── PlayerHealth ──────────────────────────────────────────────────────────────
 // Player hit points. Owned by enemy_system (damage) and combat_system.
 struct PlayerHealth {
-    float hp      = 10.f;
-    float max_hp  = 10.f;
+    float hp      = 100.f;
+    float max_hp  = 100.f;
     float inv_t   = 0.f;   // invincibility seconds after being hit
+};
+
+// ── EquipmentTag ──────────────────────────────────────────────────────────────
+// Attached to the player entity. Tracks currently equipped items.
+// Empty string = slot vacío.
+// Stats efectivos (GDD 3.5):
+//   Ataque base=5, espada_hierro→25
+//   Defensa base=0, casco_hierro→+5, pechera_hierro→+10
+//   HP base=100, casco_hierro→+20 max_hp, pechera_hierro→+50 max_hp
+//   Velocidad base=5, pechera_hierro→4
+struct EquipmentTag {
+    std::string weapon_id = "";   // "espada_hierro" o ""
+    std::string helmet_id = "";   // "casco_hierro"  o ""
+    std::string chest_id  = "";   // "pechera_hierro" o ""
 };
 
 // ── EnemyTag ──────────────────────────────────────────────────────────────────

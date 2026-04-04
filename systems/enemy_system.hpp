@@ -51,11 +51,18 @@ inline void enemy_system(entt::registry& reg, float dt) {
             vel.vx = vel.vy = 0.f;
         }
 
-        // Contact damage
+        // Contact damage (reducido por defensa del equipo)
         et.dmg_cd = std::max(0.f, et.dmg_cd - dt);
         if (dist < 0.7f && et.dmg_cd <= 0.f && player_hp && player_hp->inv_t <= 0.f) {
-            player_hp->hp   -= et.contact_dmg;
-            player_hp->inv_t = 0.8f;   // 0.8 s invincibility after hit
+            float defense = 0.f;
+            if (reg.all_of<components::EquipmentTag>(player_e)) {
+                auto& eq = reg.get<components::EquipmentTag>(player_e);
+                if (eq.helmet_id == "casco_hierro")   defense += 5.f;
+                if (eq.chest_id  == "pechera_hierro") defense += 10.f;
+            }
+            float dmg = std::max(0.f, et.contact_dmg - defense);
+            player_hp->hp   -= dmg;
+            player_hp->inv_t = 0.8f;
             et.dmg_cd        = 0.5f;
         }
     }

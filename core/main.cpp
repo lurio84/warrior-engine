@@ -163,6 +163,32 @@ int main(int argc, char* argv[]) {
     FileWatcher fw;
     fw.watch(shaders_dir);
 
+    // ── Game state ────────────────────────────────────────────────────────────
+    enum class GameState { Playing, GameOver, Victory };
+    GameState game_state    = GameState::Playing;
+    double    time_at_end   = 0.0;
+    bool      restart_req   = false;
+
+    // Helper: full scene reset (called on restart)
+    auto reset_scene = [&]() {
+        reg.clear();
+        grid             = PlacementGrid{};
+        build.selected   = 0;
+        build.orientation= 0;
+        build.preview    = entt::null;
+        ws    = WaveState{};
+        scene = init_scene(reg, tilemap, cam, grid, base_dir);
+        {
+            auto view = reg.view<components::ConveyorTag, components::Transform>();
+            for (auto [e, ct, tf] : view.each())
+                refresh_belt_area(reg, grid,
+                                  PlacementGrid::to_tile(tf.x),
+                                  PlacementGrid::to_tile(tf.y));
+        }
+        game_state  = GameState::Playing;
+        restart_req = false;
+    };
+
     // ── Fixed-timestep loop ───────────────────────────────────────────────────
     uint64_t prev_ticks = SDL_GetTicks64();
     double   accumulator = 0.0;
@@ -181,7 +207,11 @@ int main(int argc, char* argv[]) {
                     break;
                 case SDL_KEYDOWN:
                     switch (event.key.keysym.sym) {
-                        case SDLK_ESCAPE: running = false;       break;
+                        case SDLK_ESCAPE: running = false;         break;
+                        case SDLK_r:
+                            if (game_state != GameState::Playing)
+                                restart_req = true;
+                            break;
                         case SDLK_F1:     debug_ui.toggle();     break;
                         case SDLK_F5:
                             save_game(base_dir + "savegame.json",
@@ -222,9 +252,14 @@ int main(int argc, char* argv[]) {
         // ── Input snapshot ────────────────────────────────────────────────────
         input.update();
 
+        // ── Restart ───────────────────────────────────────────────────────────
+        if (restart_req) { reset_scene(); }
+
         // ── Per-frame systems (input-driven, outside fixed timestep) ──────────
-        placement_system(reg, grid, cam, input, build, vp_w, vp_h);
-        combat_system(reg, input);
+        if (game_state == GameState::Playing) {
+            placement_system(reg, grid, cam, input, build, vp_w, vp_h);
+            combat_system(reg, input, scene.inventory);
+        }
 
         // ── Fixed-timestep logic at 50 Hz ─────────────────────────────────────
         uint64_t now   = SDL_GetTicks64();
@@ -233,7 +268,7 @@ int main(int argc, char* argv[]) {
         accumulator   += delta;
         fps = (delta > 0.0) ? static_cast<float>(1.0 / delta) : 0.f;
 
-        while (accumulator >= TICK_SECONDS) {
+        while (game_state == GameState::Playing && accumulator >= TICK_SECONDS) {
             float dt = static_cast<float>(TICK_SECONDS);
 
             // ── Gameplay systems (order matters) ──────────────────────────────
@@ -243,7 +278,7 @@ int main(int argc, char* argv[]) {
                         tilemap.width(), tilemap.height());
             conveyor_system(reg, static_cast<float>(total_time));
             drill_system(reg, dt);
-            item_system(reg, dt, scene.inventory, grid, audio);
+            item_system(reg, dt, scene.inventory, scene.total_items_produced, grid, audio);
             machine_system(reg, dt, grid);
 
             // ── Physics: apply velocity → position ───────────────────────────
@@ -283,6 +318,25 @@ int main(int argc, char* argv[]) {
             // ── Camera sigue al jugador ───────────────────────────────────────
             camera_system(reg, cam, dt);
 
+            // ── Condición de derrota ──────────────────────────────────────────
+            for (auto [e, ph] : reg.view<components::PlayerHealth>().each()) {
+                if (ph.hp <= 0.f) {
+                    game_state  = GameState::GameOver;
+                    time_at_end = total_time;
+                }
+                break;
+            }
+
+            // ── Condición de victoria: oleada 10 completada sin enemigos ─────
+            if (ws.wave >= MAX_WAVES) {
+                int enemy_count = 0;
+                reg.view<components::EnemyTag>().each([&](auto){ ++enemy_count; });
+                if (enemy_count == 0) {
+                    game_state  = GameState::Victory;
+                    time_at_end = total_time;
+                }
+            }
+
             total_time  += TICK_SECONDS;
             accumulator -= TICK_SECONDS;
         }
@@ -293,15 +347,32 @@ int main(int argc, char* argv[]) {
         renderer.draw_tilemap(tilemap);
         renderer.draw_registry(reg);
 
-        // Collect player HP for HUD
-        float hud_hp = 10.f, hud_max_hp = 10.f;
+        // Collect player HP + equipment for HUD
+        float hud_hp = 100.f, hud_max_hp = 100.f;
+        const components::EquipmentTag* equip_ptr = nullptr;
         for (auto [e, ph] : reg.view<components::PlayerHealth>().each()) {
-            hud_hp = ph.hp; hud_max_hp = ph.max_hp; break;
+            hud_hp = ph.hp; hud_max_hp = ph.max_hp;
+            if (reg.all_of<components::EquipmentTag>(e))
+                equip_ptr = &reg.get<components::EquipmentTag>(e);
+            break;
         }
 
         debug_ui.begin_frame();
         debug_ui.draw(reg, cam, audio, fps, total_time, net.stats());
-        debug_ui.draw_hud(scene.inventory, hud_hp, hud_max_hp, ws.wave);
+        debug_ui.draw_hud(scene.inventory, hud_hp, hud_max_hp,
+                          ws.wave, ws.timer, equip_ptr);
+
+        if (game_state != GameState::Playing) {
+            debug_ui.draw_end_screen(
+                game_state == GameState::Victory
+                    ? DebugUI::GameResult::Victory
+                    : DebugUI::GameResult::GameOver,
+                ws.wave,
+                scene.total_items_produced,
+                time_at_end,
+                restart_req);
+        }
+
         debug_ui.end_frame();
 
         SDL_GL_SwapWindow(window);

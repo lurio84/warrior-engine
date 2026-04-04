@@ -12,7 +12,8 @@
 
 // ── Scene state (owned by main) ───────────────────────────────────────────────
 struct SceneState {
-    float belt_speed = 1.5f;
+    float belt_speed         = 1.5f;
+    int   total_items_produced = 0;   // acumulador para pantalla de game over
     std::map<std::string, int> inventory;
 };
 
@@ -123,6 +124,7 @@ inline SceneState init_scene(entt::registry& reg,
             reg.emplace<components::Velocity>(e);
             reg.emplace<components::PlayerTag>(e);
             reg.emplace<components::PlayerHealth>(e);
+            reg.emplace<components::EquipmentTag>(e);
 
         } else {
             std::cerr << "[Scene] unknown object type: " << type << "\n";

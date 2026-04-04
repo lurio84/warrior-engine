@@ -7,6 +7,7 @@
 #include <map>
 #include "components.hpp"
 #include "../systems/wave_system.hpp"
+#include "../systems/combat_system.hpp"   // apply_equipment_effects
 
 // ── save_game ─────────────────────────────────────────────────────────────────
 // Persists: inventory, wave number + timer, player position + HP.
@@ -25,9 +26,15 @@ inline void save_game(const std::string& path,
         j["player_x"] = tf.x;
         j["player_y"] = tf.y;
         if (reg.all_of<components::PlayerHealth>(e)) {
-            auto& ph      = reg.get<components::PlayerHealth>(e);
+            auto& ph           = reg.get<components::PlayerHealth>(e);
             j["player_hp"]     = ph.hp;
             j["player_max_hp"] = ph.max_hp;
+        }
+        if (reg.all_of<components::EquipmentTag>(e)) {
+            auto& eq           = reg.get<components::EquipmentTag>(e);
+            j["equipment"]["weapon"] = eq.weapon_id;
+            j["equipment"]["helmet"] = eq.helmet_id;
+            j["equipment"]["chest"]  = eq.chest_id;
         }
         break;
     }
@@ -64,6 +71,14 @@ inline bool load_game(const std::string& path,
             auto& ph = reg.get<components::PlayerHealth>(e);
             if (j.contains("player_hp"))     ph.hp     = j["player_hp"].get<float>();
             if (j.contains("player_max_hp")) ph.max_hp = j["player_max_hp"].get<float>();
+        }
+        if (j.contains("equipment") && reg.all_of<components::EquipmentTag>(e)) {
+            auto& eq     = reg.get<components::EquipmentTag>(e);
+            auto& eq_j   = j["equipment"];
+            eq.weapon_id = eq_j.value("weapon", "");
+            eq.helmet_id = eq_j.value("helmet", "");
+            eq.chest_id  = eq_j.value("chest",  "");
+            apply_equipment_effects(reg, e);
         }
         break;
     }

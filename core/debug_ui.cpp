@@ -136,8 +136,25 @@ void DebugUI::draw(entt::registry& reg, Camera& cam,
 }
 
 void DebugUI::draw_hud(const std::map<std::string, int>& inventory,
-                       float hp, float max_hp, int wave) {
+                       float hp, float max_hp, int wave, float wave_timer,
+                       const components::EquipmentTag* equip) {
     ImGuiIO& io = ImGui::GetIO();
+
+    // ── Countdown centrado (solo cuando queden <30 s para la siguiente oleada) ─
+    if (wave_timer < 30.f) {
+        ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, 10.f},
+                                 ImGuiCond_Always, {0.5f, 0.f});
+        ImGui::SetNextWindowBgAlpha(0.75f);
+        ImGui::Begin("##countdown", nullptr,
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+            ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoMove);
+        ImGui::TextColored({1.f, 0.3f, 0.1f, 1.f},
+                           "Oleada %d en %.0f s", wave + 1, wave_timer);
+        ImGui::End();
+    }
+
+    // ── Panel principal (esquina superior derecha) ────────────────────────────
     ImGui::SetNextWindowPos({io.DisplaySize.x - 10.f, 10.f},
                              ImGuiCond_Always, {1.f, 0.f});
     ImGui::SetNextWindowBgAlpha(0.6f);
@@ -146,35 +163,83 @@ void DebugUI::draw_hud(const std::map<std::string, int>& inventory,
         ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize |
         ImGuiWindowFlags_NoMove);
 
-    // ── Vida del jugador ──────────────────────────────────────────────────────
+    // ── Vida ──────────────────────────────────────────────────────────────────
     ImGui::TextColored({0.9f, 0.3f, 0.3f, 1.f}, "HP");
     ImGui::SameLine();
     float frac = (max_hp > 0.f) ? (hp / max_hp) : 0.f;
-    ImVec4 bar_col = (frac > 0.5f) ? ImVec4{0.2f,0.8f,0.2f,1.f}
+    ImVec4 bar_col = (frac > 0.5f)  ? ImVec4{0.2f,0.8f,0.2f,1.f}
                    : (frac > 0.25f) ? ImVec4{0.9f,0.7f,0.1f,1.f}
                    :                  ImVec4{0.9f,0.2f,0.2f,1.f};
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_col);
     char hp_label[32];
     std::snprintf(hp_label, sizeof(hp_label), "%.0f/%.0f", hp, max_hp);
-    ImGui::ProgressBar(frac, {120.f, 0.f}, hp_label);
+    ImGui::ProgressBar(frac, {160.f, 0.f}, hp_label);
     ImGui::PopStyleColor();
 
     // ── Oleada ────────────────────────────────────────────────────────────────
     if (wave > 0)
-        ImGui::TextColored({1.f, 0.5f, 0.2f, 1.f}, "Oleada %d", wave);
+        ImGui::TextColored({1.f, 0.5f, 0.2f, 1.f}, "Oleada %d / %d", wave, 10);
     else
-        ImGui::TextDisabled("Oleada 0 (inicio)");
+        ImGui::TextDisabled("Primera oleada en %.0f s", wave_timer);
 
+    // ── Equipo ────────────────────────────────────────────────────────────────
     ImGui::Separator();
+    ImGui::TextColored({0.7f, 0.85f, 1.f, 1.f}, "Equipo");
+    if (equip) {
+        ImGui::Text("Arma    : %s", equip->weapon_id.empty()  ? "-" : equip->weapon_id.c_str());
+        ImGui::Text("Casco   : %s", equip->helmet_id.empty()  ? "-" : equip->helmet_id.c_str());
+        ImGui::Text("Pechera : %s", equip->chest_id.empty()   ? "-" : equip->chest_id.c_str());
+        ImGui::TextDisabled("[E] equipar desde cofre");
+    }
 
     // ── Recursos ─────────────────────────────────────────────────────────────
-    ImGui::TextColored({1.f, 0.85f, 0.1f, 1.f}, "Recursos");
     ImGui::Separator();
+    ImGui::TextColored({1.f, 0.85f, 0.1f, 1.f}, "Recursos");
     if (inventory.empty()) {
         ImGui::TextDisabled("(ninguno)");
     } else {
         for (const auto& [type, count] : inventory)
             ImGui::Text("%-16s %d", type.c_str(), count);
     }
+    ImGui::End();
+}
+
+void DebugUI::draw_end_screen(GameResult result, int waves_survived,
+                               int items_produced, double time_played,
+                               bool& restart_requested) {
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f},
+                             ImGuiCond_Always, {0.5f, 0.5f});
+    ImGui::SetNextWindowSize({500.f, 0.f}, ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.92f);
+    ImGui::Begin("##endscreen", nullptr,
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+
+    if (result == GameResult::Victory) {
+        ImGui::TextColored({1.f, 0.9f, 0.1f, 1.f}, "*** VICTORIA ***");
+        ImGui::TextColored({0.8f, 0.8f, 0.8f, 1.f},
+                           "Sobreviviste las 10 oleadas.");
+    } else {
+        ImGui::TextColored({0.9f, 0.2f, 0.2f, 1.f}, "*** GAME OVER ***");
+        ImGui::TextColored({0.8f, 0.8f, 0.8f, 1.f},
+                           "El jugador ha caido en combate.");
+    }
+
+    ImGui::Separator();
+    int minutes = static_cast<int>(time_played) / 60;
+    int seconds = static_cast<int>(time_played) % 60;
+    ImGui::Text("Oleadas sobrevividas : %d / 10", waves_survived);
+    ImGui::Text("Items producidos     : %d",   items_produced);
+    ImGui::Text("Tiempo jugado        : %02d:%02d", minutes, seconds);
+    ImGui::Separator();
+
+    ImGui::TextColored({0.6f,0.9f,0.6f,1.f}, "[R] Reiniciar");
+    ImGui::SameLine();
+    ImGui::TextColored({0.7f,0.7f,0.7f,1.f}, "  [ESC] Salir");
+
+    if (ImGui::Button("Reiniciar", {200.f, 0.f}))
+        restart_requested = true;
+
     ImGui::End();
 }

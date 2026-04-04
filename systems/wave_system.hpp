@@ -3,16 +3,37 @@
 #include <vector>
 #include <iostream>
 #include <cstdlib>
+#include <glm/glm.hpp>
 #include "components.hpp"
 #include "placement_grid.hpp"
+
+static constexpr int MAX_WAVES = 10;   // GDD 2.2
 
 // ── WaveState ─────────────────────────────────────────────────────────────────
 struct WaveState {
     int   wave       = 0;
-    float timer      = 5.f;    // seconds until next wave
+    float timer      = 5.f;    // seconds until next wave (first wave at 5s)
     float interval   = 20.f;
-    int   base_count = 3;      // enemies in wave 1; increases by 2 per wave
+    int   base_count = 3;      // enemies in wave 1; +2 per wave
 };
+
+// ── Tipos de enemigo (GDD 3.5) ────────────────────────────────────────────────
+struct EnemyType {
+    const char* sprite_id;
+    float       hp;
+    float       contact_dmg;
+    float       speed;
+    glm::vec4   tint;
+};
+
+inline EnemyType select_enemy_type(int wave) {
+    if (wave >= 7)  // Jefe menor
+        return { "enemy", 200.f, 35.f, 1.5f, {1.0f, 0.5f, 0.0f, 1.f} };
+    if (wave >= 3)  // Troll
+        return { "enemy",  80.f, 20.f, 1.0f, {0.5f, 0.3f, 1.0f, 1.f} };
+    // Goblin
+    return          { "enemy",  30.f,  8.f, 2.0f, {0.3f, 0.9f, 0.3f, 1.f} };
+}
 
 // ── wave_system ───────────────────────────────────────────────────────────────
 // Decrements timer each tick. When it reaches 0, spawns a wave of enemies at
@@ -60,18 +81,20 @@ inline void wave_system(entt::registry& reg, const PlacementGrid& grid,
         tf.x = static_cast<float>(sx);
         tf.y = static_cast<float>(sy);
 
+        auto etype = select_enemy_type(ws.wave);
         auto& sr   = reg.emplace<components::SpriteRef>(e);
-        sr.sprite_id = "enemy";
+        sr.sprite_id = etype.sprite_id;
         sr.size_w    = 1;
         sr.size_h    = 1;
-        sr.layer     = 8;   // above belts, below player
+        sr.layer     = 8;
+        sr.tint      = etype.tint;
 
         reg.emplace<components::Velocity>(e);
         auto& et   = reg.emplace<components::EnemyTag>(e);
-        // Scale difficulty: each wave enemies are slightly faster and tankier
-        et.speed   = 2.0f + 0.1f * static_cast<float>(ws.wave);
-        et.max_hp  = 3.f  + 0.5f * static_cast<float>(ws.wave - 1);
-        et.hp      = et.max_hp;
+        et.hp          = etype.hp;
+        et.max_hp      = etype.hp;
+        et.speed       = etype.speed;
+        et.contact_dmg = etype.contact_dmg;
 
         ++spawned;
     }
