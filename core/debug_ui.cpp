@@ -165,7 +165,9 @@ void DebugUI::draw_hud(const std::map<std::string, int>& inventory,
             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
             ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize |
             ImGuiWindowFlags_NoMove);
-        ImGui::TextColored({0.3f, 1.f, 0.5f, 1.f}, "[E]  Equipar desde cofre");
+        ImGui::TextColored({0.3f, 1.f, 0.5f, 1.f}, "[E]  Craftear equipo:");
+        ImGui::TextColored({1.f, 0.85f, 0.3f, 1.f},
+            "  5 lingotes -> espada    3 -> casco    8 -> pechera");
         ImGui::End();
     }
 

@@ -106,7 +106,7 @@ inline SceneState init_scene(entt::registry& reg,
             std::string recipe  = obj.value("recipe", "forge");
             int         out_dir = obj.value("out_dir", 0);
 
-            auto e    = spawn_sprite(reg, x, y, "item_box", 1, 1, 3);
+            auto e    = spawn_sprite(reg, x, y, "forge", 1, 1, 3);
             auto& mt  = reg.emplace<components::MachineTag>(e);
             mt.recipe_id = recipe;
             mt.out_dir   = out_dir;

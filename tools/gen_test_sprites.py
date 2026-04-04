@@ -434,6 +434,41 @@ def make_iron_ingot():
     return img
 
 
+# ── forge — máquina procesadora: carcasa oscura con chimenea y llama naranja ──
+def make_forge():
+    BASE    = (40, 35, 30, 255)
+    FRAME   = (20, 18, 15, 255)
+    METAL   = (70, 65, 60, 255)
+    METAL_L = (110, 100, 90, 255)
+    FIRE1   = (255, 140, 20, 255)
+    FIRE2   = (255, 80, 10, 255)
+    FIRE3   = (255, 220, 60, 255)
+    CHIMNEY = (55, 50, 45, 255)
+
+    img = Image.new("RGBA", (S, S), BASE)
+    d = ImageDraw.Draw(img)
+
+    # Carcasa principal
+    d.rectangle([2, 6, S-3, S-3], fill=METAL, outline=FRAME, width=2)
+    # Panel interior oscuro (cámara de fundición)
+    d.rectangle([5, 10, S-6, S-6], fill=BASE, outline=FRAME)
+    # Chimenea (arriba-centro)
+    d.rectangle([11, 0, 20, 8], fill=CHIMNEY, outline=FRAME)
+    # Llamas que salen de la chimenea
+    for fx, fy, fc in [(13, 1, FIRE3), (15, 0, FIRE1), (17, 2, FIRE2),
+                       (14, 3, FIRE1), (16, 1, FIRE3), (13, 4, FIRE2)]:
+        if 0 <= fx < S and 0 <= fy < S:
+            img.putpixel((fx, fy), fc)
+    # Ventana de fundición (resplandor naranja)
+    d.rectangle([7, 14, S-8, S-10], fill=FIRE2, outline=FIRE1)
+    d.rectangle([9, 16, S-10, S-12], fill=FIRE3)
+    # Remaches
+    for rx, ry in [(3, 7), (S-4, 7), (3, S-4), (S-4, S-4)]:
+        d.ellipse([rx-1, ry-1, rx+1, ry+1], fill=METAL_L)
+
+    return img
+
+
 # ── attack_ring — anillo de ataque melee, trazo circular amarillo ─────────────
 def make_attack_ring():
     RING  = (255, 230, 60, 220)
@@ -469,6 +504,7 @@ save(make_item(),                "item.png")
 save(make_enemy(),               "enemy.png")
 save(make_iron_ingot(),          "iron_ingot.png")
 save(make_attack_ring(),         "attack_ring.png")
+save(make_forge(),               "forge.png")
 for i, fn in enumerate([make_drill_0, make_drill_1, make_drill_2, make_drill_3,
                          make_drill_4, make_drill_5, make_drill_6, make_drill_7]):
     save(fn(), f"drill_{i}.png")

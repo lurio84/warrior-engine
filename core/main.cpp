@@ -132,6 +132,7 @@ int main(int argc, char* argv[]) {
     audio.load("click",       sounds_dir + "click.wav");
     audio.load("belt_loop",   sounds_dir + "belt_loop.wav");
     audio.load("item_pickup", sounds_dir + "item_pickup.wav");
+    audio.set_volume(0.25f);   // volumen inicial moderado
 
     InputSystem input;
     TileMap tilemap;

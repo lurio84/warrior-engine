@@ -66,7 +66,11 @@ inline void combat_system(entt::registry& reg,
 
     auto& ptag = reg.get<components::PlayerTag>(player_e);
 
-    // ── E: pickup de equipo desde cofre adyacente ─────────────────────────────
+    // ── E: craftear y equipar desde cofre adyacente ──────────────────────────
+    // El cofre actúa como estación de crafting:
+    //   5× iron_ingot → espada_hierro
+    //   3× iron_ingot → casco_hierro
+    //   8× iron_ingot → pechera_hierro
     if (input.pressed("e")) {
         // Buscar cofre (BoxTag) en rango — BoxTag es empty, no aparece en structured binding
         entt::entity box_e = entt::null;
@@ -81,20 +85,25 @@ inline void combat_system(entt::registry& reg,
 
         if (box_e != entt::null &&
             reg.all_of<components::EquipmentTag>(player_e)) {
-            auto& eq = reg.get<components::EquipmentTag>(player_e);
+            auto& eq      = reg.get<components::EquipmentTag>(player_e);
+            int&  ingots  = inventory["iron_ingot"];
 
-            // Prioridad: arma > casco > pechera
-            const char* equip_items[] = {"espada_hierro", "casco_hierro", "pechera_hierro"};
-            std::string* equip_slots[] = {&eq.weapon_id,  &eq.helmet_id,  &eq.chest_id};
-            for (int i = 0; i < 3; ++i) {
-                if (!equip_slots[i]->empty()) continue;    // ya equipado
-                auto it = inventory.find(equip_items[i]);
-                if (it == inventory.end() || it->second <= 0) continue;
-
-                *equip_slots[i] = equip_items[i];
-                if (--it->second <= 0) inventory.erase(it);
+            // Recetas: prioridad arma > casco > pechera
+            struct CraftRecipe { const char* item; std::string* slot; int cost; };
+            CraftRecipe recipes[] = {
+                { "espada_hierro",  &eq.weapon_id,  5 },
+                { "casco_hierro",   &eq.helmet_id,  3 },
+                { "pechera_hierro", &eq.chest_id,   8 },
+            };
+            for (auto& r : recipes) {
+                if (!r.slot->empty()) continue;         // ya equipado
+                if (ingots < r.cost) continue;          // no hay suficientes
+                *r.slot = r.item;
+                ingots -= r.cost;
+                if (ingots <= 0) inventory.erase("iron_ingot");
                 apply_equipment_effects(reg, player_e);
-                std::cout << "[Equip] " << equip_items[i] << "\n";
+                std::cout << "[Craft+Equip] " << r.item
+                          << " (coste: " << r.cost << " iron_ingot)\n";
                 break;
             }
         }
