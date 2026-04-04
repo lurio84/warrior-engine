@@ -25,7 +25,8 @@ public:
               float fps, double total_time, const NetStats& net);
     void draw_hud(const std::map<std::string, int>& inventory,
                   float hp, float max_hp, int wave, float wave_timer,
-                  const components::EquipmentTag* equip = nullptr);
+                  const components::EquipmentTag* equip = nullptr,
+                  bool near_chest = false);
     void draw_end_screen(GameResult result, int waves_survived,
                          int items_produced, double time_played,
                          bool& restart_requested);

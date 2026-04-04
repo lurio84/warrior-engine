@@ -316,6 +316,16 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            // ── EffectTag: tick TTL y destruir expirados ──────────────────────
+            {
+                std::vector<entt::entity> dead_effects;
+                for (auto [e, ef] : reg.view<components::EffectTag>().each()) {
+                    ef.ttl -= dt;
+                    if (ef.ttl <= 0.f) dead_effects.push_back(e);
+                }
+                for (auto e : dead_effects) reg.destroy(e);
+            }
+
             // ── Camera sigue al jugador ───────────────────────────────────────
             camera_system(reg, cam, dt);
 
@@ -358,10 +368,25 @@ int main(int argc, char* argv[]) {
             break;
         }
 
+        // ── Near-chest detection for HUD prompt ───────────────────────────────
+        bool near_chest = false;
+        {
+            float player_x = 0.f, player_y = 0.f;
+            for (auto [e, tf, pt] : reg.view<components::Transform,
+                                            components::PlayerTag>().each()) {
+                player_x = tf.x; player_y = tf.y; break;
+            }
+            for (auto [e, tf] : reg.view<components::Transform,
+                                         components::BoxTag>().each()) {
+                float dx = tf.x - player_x, dy = tf.y - player_y;
+                if (dx*dx + dy*dy <= 1.5f * 1.5f) { near_chest = true; break; }
+            }
+        }
+
         debug_ui.begin_frame();
         debug_ui.draw(reg, cam, audio, fps, total_time, net.stats());
         debug_ui.draw_hud(scene.inventory, hud_hp, hud_max_hp,
-                          ws.wave, ws.timer, equip_ptr);
+                          ws.wave, ws.timer, equip_ptr, near_chest);
 
         if (game_state != GameState::Playing) {
             debug_ui.draw_end_screen(

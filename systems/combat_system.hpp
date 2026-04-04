@@ -122,4 +122,18 @@ inline void combat_system(entt::registry& reg,
     }
     for (auto e : to_destroy)
         reg.destroy(e);
+
+    // ── Anillo visual de ataque (EffectTag) ───────────────────────────────────
+    auto ring_e = reg.create();
+    auto& rtf   = reg.emplace<components::Transform>(ring_e);
+    rtf.x = px; rtf.y = py;
+    rtf.scale_x = ATTACK_RANGE * 2.f;
+    rtf.scale_y = ATTACK_RANGE * 2.f;
+    auto& rsr       = reg.emplace<components::SpriteRef>(ring_e);
+    rsr.sprite_id   = "attack_ring";
+    rsr.layer       = 15;
+    rsr.tint        = glm::vec4{1.f, 0.9f, 0.1f, 0.85f};
+    rsr.size_w      = 1;
+    rsr.size_h      = 1;
+    reg.emplace<components::EffectTag>(ring_e);
 }

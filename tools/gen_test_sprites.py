@@ -434,6 +434,28 @@ def make_iron_ingot():
     return img
 
 
+# ── attack_ring — anillo de ataque melee, trazo circular amarillo ─────────────
+def make_attack_ring():
+    RING  = (255, 230, 60, 220)
+    RING2 = (255, 180, 20, 120)
+
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    cx, cy = S / 2.0, S / 2.0
+    r_outer = 14.0
+    r_inner = 10.0
+
+    for y in range(S):
+        for x in range(S):
+            r = _math.hypot(x - cx, y - cy)
+            if r_inner <= r <= r_outer:
+                # Fade in the inner edge, sharp outer edge
+                t = (r - r_inner) / (r_outer - r_inner)
+                alpha = int(220 * (1.0 - (1.0 - t) ** 2))
+                img.putpixel((x, y), (255, 220, 50, alpha))
+
+    return img
+
+
 print("Generando sprites procedurales en assets/raw/:")
 save(make_floor_tile(),          "floor_tile.png")
 save(make_wall_tile(),           "wall_tile.png")
@@ -446,6 +468,7 @@ save(make_item_box(),            "item_box.png")
 save(make_item(),                "item.png")
 save(make_enemy(),               "enemy.png")
 save(make_iron_ingot(),          "iron_ingot.png")
+save(make_attack_ring(),         "attack_ring.png")
 for i, fn in enumerate([make_drill_0, make_drill_1, make_drill_2, make_drill_3,
                          make_drill_4, make_drill_5, make_drill_6, make_drill_7]):
     save(fn(), f"drill_{i}.png")

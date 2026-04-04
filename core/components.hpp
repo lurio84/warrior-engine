@@ -140,4 +140,10 @@ struct BoxTag {};
 // Las cintas NO tienen SolidTag (son caminables).
 struct SolidTag {};
 
+// ── EffectTag ─────────────────────────────────────────────────────────────────
+// Marca una entidad visual temporal. Se destruye cuando ttl llega a 0.
+struct EffectTag {
+    float ttl = 0.15f;  // segundos de vida
+};
+
 } // namespace components

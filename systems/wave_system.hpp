@@ -12,9 +12,9 @@ static constexpr int MAX_WAVES = 10;   // GDD 2.2
 // ── WaveState ─────────────────────────────────────────────────────────────────
 struct WaveState {
     int   wave       = 0;
-    float timer      = 5.f;    // seconds until next wave (first wave at 5s)
-    float interval   = 20.f;
-    int   base_count = 3;      // enemies in wave 1; +2 per wave
+    float timer      = 60.f;   // 60s para la primera oleada (tiempo de montar la fábrica)
+    float interval   = 30.f;   // 30s entre oleadas
+    int   base_count = 3;      // enemigos en oleada 1; +2 por oleada
 };
 
 // ── Tipos de enemigo (GDD 3.5) ────────────────────────────────────────────────

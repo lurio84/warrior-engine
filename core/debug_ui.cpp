@@ -137,7 +137,8 @@ void DebugUI::draw(entt::registry& reg, Camera& cam,
 
 void DebugUI::draw_hud(const std::map<std::string, int>& inventory,
                        float hp, float max_hp, int wave, float wave_timer,
-                       const components::EquipmentTag* equip) {
+                       const components::EquipmentTag* equip,
+                       bool near_chest) {
     ImGuiIO& io = ImGui::GetIO();
 
     // ── Countdown centrado (solo cuando queden <30 s para la siguiente oleada) ─
@@ -151,6 +152,20 @@ void DebugUI::draw_hud(const std::map<std::string, int>& inventory,
             ImGuiWindowFlags_NoMove);
         ImGui::TextColored({1.f, 0.3f, 0.1f, 1.f},
                            "Oleada %d en %.0f s", wave + 1, wave_timer);
+        ImGui::End();
+    }
+
+    // ── Prompt contextual: cofre cercano ─────────────────────────────────────
+    if (near_chest) {
+        ImGui::SetNextWindowPos(
+            {io.DisplaySize.x * 0.5f, io.DisplaySize.y - 80.f},
+            ImGuiCond_Always, {0.5f, 1.f});
+        ImGui::SetNextWindowBgAlpha(0.80f);
+        ImGui::Begin("##chest_prompt", nullptr,
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+            ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoMove);
+        ImGui::TextColored({0.3f, 1.f, 0.5f, 1.f}, "[E]  Equipar desde cofre");
         ImGui::End();
     }
 
