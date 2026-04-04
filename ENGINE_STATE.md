@@ -1,8 +1,9 @@
-# Engine State — The Warrior's Way
+# Engine State — The Warrior's Way Engine
 
 ## Fase actual
-**Fase 13 — C++ puro, sin Lua**
-Motor base completo. Gameplay en sistemas C++/EnTT. Demo: drill animado → cinta → cofre.
+**Phase 15 — Factory-defender completo, jugable end-to-end**
+
+Loop completo implementado: drill → cinta → forge → cinta → cofre → crafteo de equipo → combate vs oleadas.
 
 ---
 
@@ -25,144 +26,155 @@ Motor base completo. Gameplay en sistemas C++/EnTT. Demo: drill animado → cint
 ## Estructura de directorios
 ```
 /warrior-engine
-  /core           — motor: renderer, atlas, audio, input, camera, debug_ui, network, tilemap
-    main.cpp      — game loop, eventos SDL, timestep 50 Hz
-    game_scene.hpp — init de la escena (reemplaza main.lua)
-    components.hpp — todos los componentes ECS
-  /systems        — un archivo por sistema de gameplay (header-only inline)
-    drill_system.hpp
-    item_system.hpp
-    conveyor_system.hpp
-    machine_system.hpp
-    player_system.hpp
+  /core
+    main.cpp          — game loop (50 Hz fixed timestep), eventos SDL, GameState
+    game_scene.hpp    — init_scene: spawna entidades desde assets/maps/test.json
+    components.hpp    — todos los componentes ECS
+    renderer.hpp/.cpp — draw calls OpenGL DSA, UV atlas, UV scroll animado
+    atlas.hpp/.cpp    — carga atlas.png + atlas.json, provee UV rects
+    audio.hpp/.cpp    — miniaudio: load/play/stop/volume
+    camera.hpp        — struct Camera (x, y, zoom)
+    input.hpp         — InputSystem: snapshot teclado+mouse por frame
+    debug_ui.hpp/.cpp — HUD (HP, oleada, equipo, recursos) + panel F1
+    network.hpp/.cpp  — NetworkManager ENet: host/join, sync jugadores
+    tilemap.hpp/.cpp  — carga y dibuja tilemap JSON
+    placement_grid.hpp — mapa 2D (int x, int y) → entt::entity
+    save_load.hpp     — F5/F9: guarda/carga inventory + wave + EquipmentTag
+    file_watcher.hpp/.cpp — efsw, hot-reload de shaders
+    stb_impl.cpp      — implementación única de stb_image
+    audio_impl.cpp    — implementación única de miniaudio
+  /systems
+    player_system.hpp    — input → velocity, tint feedback
+    enemy_system.hpp     — steering, daño contacto, cooldowns
+    wave_system.hpp      — timer + spawn oleadas en borde
+    conveyor_system.hpp  — actualiza sprite de esquinas
+    drill_system.hpp     — animación + spawn items
+    item_system.hpp      — pop-in + viaje + colección/depósito
+    machine_system.hpp   — recetas (forge: 2 iron_ore → 1 iron_ingot)
+    camera_system.hpp    — lerp hacia jugador
+    placement_system.hpp — construcción/borrado de piezas
+    combat_system.hpp    — ataque melee + crafteo equipo + EffectTag ring
   /assets
-    /raw          — sprites fuente
-    /sprites      — PNGs generados
-    /atlas        — atlas.png + atlas.json (output del pipeline)
+    /raw          — sprites fuente PNG (generados por gen_test_sprites.py)
+    /atlas        — atlas.png + atlas.json (NO en git — regenerar con build_atlas.py)
     /shaders      — GLSL (hot-reload por efsw)
-    /sounds       — WAV de prueba
-    /maps         — JSON de tilemaps
-  /game
-    /entities     — JSON de definiciones (stats, sprites, sonidos)
-    /levels       — JSON de mapas
-    /saves        — JSON de partidas
+    /sounds       — click.wav, belt_loop.wav, item_pickup.wav
+    /maps         — test.json (tilemap + objetos de escena)
   /tools
-    gen_test_sprites.py
-    build_atlas.py
-    gen_test_sounds.py
+    gen_test_sprites.py  — genera 35 sprites procedurales en assets/raw/
+    build_atlas.py       — empaqueta assets/raw/*.png en assets/atlas/
   CMakeLists.txt
-  SYSTEMS_REGISTRY.md
-  ENGINE_STATE.md
-  engine_config.json
+  CLAUDE.md             — contexto completo para Claude Code
+  ENGINE_STATE.md       — este archivo
+  SYSTEMS_REGISTRY.md   — tabla de propietario de cada componente
+  GDD.md                — Game Design Document (fuente de verdad de gameplay)
 ```
 
 ---
 
-## Archivos del core C++
-| Archivo | Responsabilidad |
-|---|---|
-| `main.cpp` | Loop principal, eventos SDL, timestep fijo 50 Hz, llama sistemas |
-| `game_scene.hpp` | Inicialización de la escena (drill + belt + box + player) |
-| `renderer.hpp/.cpp` | Draw calls OpenGL DSA, atlas UV, UV scroll animado |
-| `file_watcher.hpp/.cpp` | efsw, detecta cambios en `assets/shaders/` |
-| `atlas.hpp/.cpp` | Carga atlas.png + atlas.json, provee UV rects |
-| `stb_impl.cpp` | Implementación única de stb_image |
-| `audio.hpp/.cpp` | miniaudio: load/play/stop/volume |
-| `audio_impl.cpp` | Implementación única de miniaudio |
-| `camera.hpp` | Struct Camera (x, y, zoom) |
-| `input.hpp` | InputSystem: snapshot teclado por frame |
-| `debug_ui.hpp/.cpp` | Panels ImGui: perf, cámara, audio, entidades, red |
-| `network.hpp/.cpp` | NetworkManager ENet: host/join, sync jugadores |
-| `tilemap.hpp/.cpp` | Tilemap: load JSON, get/set tiles, draw |
-| `components.hpp` | Todos los componentes ECS |
-
----
-
-## Componentes ECS
+## Componentes ECS actuales (core/components.hpp)
 ```cpp
 Transform     { x, y, rotation, scale_x, scale_y }
 SpriteRef     { sprite_id, tint, size_w, size_h, scroll_x, scroll_y, layer }
-Velocity      { vx, vy }             // tiles/segundo, aplicado por physics cada tick
+Velocity      { vx, vy }
 NetworkPlayer { peer_id, is_local }
-ConveyorTag   { speed, direction }   // marca entidad de cinta
-DrillTag      { anim_t, frame, spawn_timer, dest_x, belt_speed }
-ItemTag       { item_type, quantity, age, popping, source_x, dest_x, belt_speed }
-MachineTag    { type, progress, recipe_id }
-PlayerTag     { speed }
+ConveyorTag   { speed, direction }
+DrillTag      { anim_t, frame, spawn_timer, dest_x, dest_y, belt_speed, active }
+ItemTag       { item_type, quantity, age, popping, source_x, source_y, dest_x, dest_y, belt_speed }
+MachineTag    { recipe_id, out_dir, progress, processing, output_ready, input_buf }
+PlayerTag     { speed, attack_cd }
+PlayerHealth  { hp, max_hp, inv_t }
+EquipmentTag  { weapon_id, helmet_id, chest_id }
+EnemyTag      { hp, max_hp, speed, contact_dmg, dmg_cd }
+BoxTag        {}  // marker — colección de items
+SolidTag      {}  // marker — colisión jugador/enemigos
+EffectTag     { ttl }  // entidad temporal (attack_ring, etc.)
 ```
 
 ---
 
-## Sistemas (SYSTEMS_REGISTRY.md)
-Ver `SYSTEMS_REGISTRY.md` para orden de ejecución completo y propietario de cada componente.
-
+## Sistemas (ver SYSTEMS_REGISTRY.md para detalle completo)
 ```
-player_system → conveyor_system → drill_system → item_system → physics → render
+Fixed timestep 50 Hz:
+  player_system → enemy_system → wave_system → conveyor_system
+  → drill_system → item_system → machine_system → physics
+  → EffectTag tick → camera_system
+
+Por frame:
+  placement_system · combat_system
 ```
 
 ---
 
-## Controles en ejecución
+## Controles
 | Tecla | Acción |
 |---|---|
-| Flechas | Pan de cámara |
-| `+` / `-` | Zoom: 0.5× → 1× → 2× → 3× → 4× |
+| `WASD` | Mover jugador |
+| `Space` | Ataque melee (radio 1.5 t, CD 0.4 s) |
+| `E` | Craftear equipo en cofre adyacente |
+| Flechas | Pan cámara |
+| `+/-` | Zoom |
 | `0` | Reset zoom |
-| `F1` | Toggle debug UI |
-| `WASD` | Mueve jugador (smooth, via player_system) |
+| `1/2/3` | Seleccionar cinta/taladro/cofre |
+| `R` | Rotar pieza |
+| Clic L/D | Colocar / Borrar |
+| `F1` | Debug UI |
+| `F5`/`F9` | Guardar / Cargar |
 | `ESC` | Salir |
+| `R` (Game Over/Victory) | Reiniciar |
 
 ---
 
 ## Pipeline de assets
+```bash
+python3 tools/gen_test_sprites.py   # → assets/raw/*.png  (35 sprites)
+python3 tools/build_atlas.py        # → assets/atlas/atlas.png + atlas.json
+cp -r assets/atlas build/assets/    # copiar al directorio de build
+cmake --build build                 # compilar
 ```
-assets/raw/*.png
-      ↓
-tools/gen_test_sprites.py  → genera PNGs de prueba en assets/sprites/
-tools/build_atlas.py       → assets/atlas/atlas.png + atlas.json
-cp -r assets/atlas build/assets/
-cmake --build build
-```
-- Atlas: potencia de 2, packing por filas, UV en [0,1] con Y-up (stbi flip)
-- Sprite IDs: `snake_case` — nunca renombrar una vez en un save
+- Atlas: 256×256 px, packing por filas, UV en [0,1] con Y-up
+- Sprite IDs: `snake_case` — no renombrar una vez usados en save files
+- assets/atlas y assets/raw están en .gitignore (se regeneran)
 
 ---
 
-## Sistema de red (ENet)
-- `--host [puerto]` → modo servidor (peer_id=0)
-- `--join <ip> [puerto]` → modo cliente (peer_id=1)
-- Puerto por defecto: 7777
+## Sistema de red
+- `--host [puerto]` → modo servidor (peer_id=0), puerto por defecto 7777
+- `--join <ip> [puerto]` → modo cliente
+- Sincroniza posición de jugadores, NO entidades de gameplay
 
 ---
 
-## Convenciones activas
+## Convenciones
 - **Y-up**: mayor Y = más arriba en pantalla
-- Tile size: 32 px (inmutable — `Renderer::TILE_SIZE_PX`)
+- Tile size: 32 px (constante `Renderer::TILE_SIZE_PX`)
 - Tick rate: 50 Hz (20 ms/tick)
-- Coordenadas: tiles en lógica, píxeles solo en renderer
-- Todo el gameplay en `systems/` — sin scripting externo
+- Coordenadas en tiles en lógica, píxeles solo en renderer
+- Todo el gameplay en `systems/` como funciones `inline` en headers
+- EnTT structured bindings: los componentes vacíos (BoxTag, SolidTag) NO aparecen en el tuple
 
 ---
 
-## Próximos pasos
-1. **Sonido pickup** (Fase B) — audio ya cargado, falta llamarlo en item_system
-2. **machine_system con recetas** (Fase C) — sin esto no hay loop de producción completo
-3. **Tilemap desde JSON** (Fase D) — sin esto el mapa es hardcoded
-4. **Sistema de oleadas** (Fase E) — sin esto no hay presión de tiempo
-5. **Combate y equipamiento** (Fase F)
+## Historial resumido de fases
+
+| Fase | Contenido |
+|---|---|
+| 1-12 | Lua scripting, prototipo, renderer básico |
+| 13 | Reescritura a C++ puro, ECS EnTT, renderer OpenGL DSA |
+| 14 | Oleadas, combate, save/load, escena desde JSON, esquinas animadas |
+| 15 | UX: ataque visual (attack_ring), crafteo de equipo, prompt cofre, oleadas más lentas, forge sprite propio, volumen inicial moderado |
 
 ---
 
-## Historial de cambios
+## Pendientes (por orden de prioridad)
+1. **Contador visual en cofre** — nº de iron_ingot sobre el tile en world-space
+2. **Más recetas / máquina anvil** — ampliar machine_system con más tipos (GDD 3.3)
+3. **Sonidos** — place, remove, enemy_die, wave_warning
+4. **Tiles de recurso en mapa** — depósitos de hierro/carbón/cobre (GDD 5.2)
+5. **Sprites IA** — ComfyUI + Flux en RTX 5070
+6. **Multiplayer sync** — entidades de juego (actualmente solo jugadores)
+7. **Save/Load completo** — persistir entidades del mapa construidas en runtime
 
-### Fase A — Fix sprites de esquinas de cinta (completada)
-- **Problema:** los brazos de las esquinas solo ocupaban media tile en el eje transversal,
-  dejando el riel exterior sin representar. La cinta recta vertical tiene rieles en x=0..3
-  y x=28..31; el brazo vertical de la esquina solo tenía el riel en x=0..3.
-- **Fix en `tools/gen_test_sprites.py`:**
-  - `make_conveyor_corner_cw`: brazo Sur ahora abarca x=0..31 en y=16..31, con rieles en
-    x=0..3 y x=28..31. Brazo Este abarca y=0..31 en x=16..31, con rieles en y=0..3 y
-    y=28..31. Riel derecho del brazo Sur restaurado en la zona de unión (x=28..31, y=16..27).
-  - `make_conveyor_corner_ccw`: mismo esquema espejado (brazo Oeste en x=0..15).
-- **Verificación:** 16/16 px RAIL en x=0..3 y x=28..31 para y=16..31 en ambas esquinas.
-  Atlas regenerado con `tools/build_atlas.py`.
+## Bugs conocidos
+- Enemigos no colisionan entre sí (se apilan)
+- save_load no persiste entidades del mapa colocadas en runtime
