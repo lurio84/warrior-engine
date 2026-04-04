@@ -88,15 +88,8 @@ inline void item_system(entt::registry& reg, float dt,
                 vel.vy = 0.f;
             }
 
-            // ── Colección por proximidad (safety net) ─────────────────────
-            float ddx = tf.x - item.dest_x;
-            float ddy = tf.y - item.dest_y;
-            if (ddx*ddx + ddy*ddy <= 0.25f) {
-                to_destroy.push_back(entity);
-                inventory[item.item_type] += item.quantity;
-                total_items_produced      += item.quantity;
-                audio.play("item_pickup");
-            }
+            // Safety net eliminado: causaba colección inmediata en items
+            // de salida de máquina (dest == spawn). El BoxTag tile check es suficiente.
         }
     }
 

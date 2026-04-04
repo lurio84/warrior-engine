@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
     // ── Scene init (replaces main.lua) ────────────────────────────────────────
     SceneState scene = init_scene(reg, tilemap, cam, grid, base_dir);
 
-    // Refrescar sprites de cintas iniciales (todas rectas, solo por consistencia)
+    // Refrescar sprites de cintas + conectar taladros
     {
         auto view = reg.view<components::ConveyorTag, components::Transform>();
         for (auto [e, ct, tf] : view.each())
@@ -151,6 +151,7 @@ int main(int argc, char* argv[]) {
                               PlacementGrid::to_tile(tf.x),
                               PlacementGrid::to_tile(tf.y));
     }
+    reconnect_drills(reg, grid);
 
     // ── Red ───────────────────────────────────────────────────────────────────
     NetworkManager net;

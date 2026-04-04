@@ -151,6 +151,11 @@ inline ChainResult find_chain_dest(int from_x, int from_y, int dir,
             speed = ctag.speed;
             cx   += DIR_DX[ctag.direction];
             cy   += DIR_DY[ctag.direction];
+        } else if (reg.all_of<components::MachineTag>(e)) {
+            // Atravesar la máquina por su dirección de output
+            auto& mtag = reg.get<components::MachineTag>(e);
+            cx += DIR_DX[mtag.out_dir];
+            cy += DIR_DY[mtag.out_dir];
         } else {
             break;
         }
