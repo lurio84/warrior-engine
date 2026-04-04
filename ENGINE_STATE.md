@@ -145,8 +145,24 @@ cmake --build build
 ---
 
 ## Próximos pasos
-1. **Feedback al recolectar** — animación/sonido cuando item_pickup llega al cofre
-2. **Cámara siguiendo al jugador** — camera_system que sigue al PlayerTag
-3. **Segunda máquina** — processor: iron_ore → iron_ingot (machine_system activo)
-4. **UI in-world** — contador de recursos sobre el cofre
-5. **Colocación dinámica** — el jugador puede poner cintas y máquinas
+1. **Sonido pickup** (Fase B) — audio ya cargado, falta llamarlo en item_system
+2. **machine_system con recetas** (Fase C) — sin esto no hay loop de producción completo
+3. **Tilemap desde JSON** (Fase D) — sin esto el mapa es hardcoded
+4. **Sistema de oleadas** (Fase E) — sin esto no hay presión de tiempo
+5. **Combate y equipamiento** (Fase F)
+
+---
+
+## Historial de cambios
+
+### Fase A — Fix sprites de esquinas de cinta (completada)
+- **Problema:** los brazos de las esquinas solo ocupaban media tile en el eje transversal,
+  dejando el riel exterior sin representar. La cinta recta vertical tiene rieles en x=0..3
+  y x=28..31; el brazo vertical de la esquina solo tenía el riel en x=0..3.
+- **Fix en `tools/gen_test_sprites.py`:**
+  - `make_conveyor_corner_cw`: brazo Sur ahora abarca x=0..31 en y=16..31, con rieles en
+    x=0..3 y x=28..31. Brazo Este abarca y=0..31 en x=16..31, con rieles en y=0..3 y
+    y=28..31. Riel derecho del brazo Sur restaurado en la zona de unión (x=28..31, y=16..27).
+  - `make_conveyor_corner_ccw`: mismo esquema espejado (brazo Oeste en x=0..15).
+- **Verificación:** 16/16 px RAIL en x=0..3 y x=28..31 para y=16..31 en ambas esquinas.
+  Atlas regenerado con `tools/build_atlas.py`.

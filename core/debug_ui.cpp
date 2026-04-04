@@ -135,7 +135,8 @@ void DebugUI::draw(entt::registry& reg, Camera& cam,
     ImGui::End();
 }
 
-void DebugUI::draw_hud(const std::map<std::string, int>& inventory) {
+void DebugUI::draw_hud(const std::map<std::string, int>& inventory,
+                       float hp, float max_hp, int wave) {
     ImGuiIO& io = ImGui::GetIO();
     ImGui::SetNextWindowPos({io.DisplaySize.x - 10.f, 10.f},
                              ImGuiCond_Always, {1.f, 0.f});
@@ -145,6 +146,28 @@ void DebugUI::draw_hud(const std::map<std::string, int>& inventory) {
         ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize |
         ImGuiWindowFlags_NoMove);
 
+    // ── Vida del jugador ──────────────────────────────────────────────────────
+    ImGui::TextColored({0.9f, 0.3f, 0.3f, 1.f}, "HP");
+    ImGui::SameLine();
+    float frac = (max_hp > 0.f) ? (hp / max_hp) : 0.f;
+    ImVec4 bar_col = (frac > 0.5f) ? ImVec4{0.2f,0.8f,0.2f,1.f}
+                   : (frac > 0.25f) ? ImVec4{0.9f,0.7f,0.1f,1.f}
+                   :                  ImVec4{0.9f,0.2f,0.2f,1.f};
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_col);
+    char hp_label[32];
+    std::snprintf(hp_label, sizeof(hp_label), "%.0f/%.0f", hp, max_hp);
+    ImGui::ProgressBar(frac, {120.f, 0.f}, hp_label);
+    ImGui::PopStyleColor();
+
+    // ── Oleada ────────────────────────────────────────────────────────────────
+    if (wave > 0)
+        ImGui::TextColored({1.f, 0.5f, 0.2f, 1.f}, "Oleada %d", wave);
+    else
+        ImGui::TextDisabled("Oleada 0 (inicio)");
+
+    ImGui::Separator();
+
+    // ── Recursos ─────────────────────────────────────────────────────────────
     ImGui::TextColored({1.f, 0.85f, 0.1f, 1.f}, "Recursos");
     ImGui::Separator();
     if (inventory.empty()) {

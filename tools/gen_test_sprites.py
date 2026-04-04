@@ -278,101 +278,158 @@ def make_drill_5(): return make_drill_frame(135)
 def make_drill_6(): return make_drill_frame(90)
 def make_drill_7(): return make_drill_frame(45)
 
-# ── conveyor_corner_cw — giro derecha, base: entrada N → salida E ────────────
-# El brazo horizontal (derecho) y el brazo vertical (abajo) comparten el mismo
-# lenguaje visual que conveyor_belt_idle. Fondo transparente → suelo visible.
-# Rotaciones: N→E (0°), E→S (-90°), S→W (180°), W→N (90°)
-def make_conveyor_corner_cw():
-    TRANS = (0, 0, 0, 0)
-    BASE  = (55, 52, 48, 255)
-    RAIL  = (38, 36, 33, 255)
-    BELT  = (70, 66, 60, 255)
-    ARROW = (140, 130, 50, 255)
+# ── conveyor_corner (animado, 8 frames) ──────────────────────────────────────
+# Cuarto-anillo circular con "ribs" (franjas radiales) que se mueven a lo largo
+# del arco en cada frame, igual que los chevrones de las cintas rectas.
+#
+# CW  (giro derecha): borde inferior → borde derecho. Centro (31,31).
+#   Parámetro t=0→1 mapea ángulo θ=π→π/2 (PIL: rib_x=31-r·cos(t·π/2), rib_y=31-r·sin(t·π/2))
+# CCW (giro izquierda): borde inferior → borde izquierdo. Centro (0,31).
+#   Parámetro t=0→1 mapea ángulo θ=0→π/2 (PIL: rib_x=r·cos(t·π/2), rib_y=31-r·sin(t·π/2))
+
+import math as _math
+
+def _corner_base(CX, CY):
+    """
+    Cuarto de círculo: BELT en r=4..27, RAIL en todo lo demás (incluyendo
+    el área exterior al arco). Sin transparencia → el rail cubre el tile
+    entero igual que en la cinta recta, evitando el gap visual del suelo.
+    Alineación de bordes garantizada: RAIL(0..3)/BELT(4..27)/RAIL(28..31).
+    """
+    RAIL = (38, 36, 33, 255)
+    BELT = (70, 66, 60, 255)
+    img = Image.new("RGBA", (S, S), RAIL)   # fondo RAIL, no transparente
+    for py in range(S):
+        for px in range(S):
+            r = _math.hypot(px - CX, py - CY)
+            if 4 <= r < 28:                 # única zona de cinta
+                img.putpixel((px, py), BELT)
+    return img
+
+def _arc_point(CX, CY, t, r, cw=True):
+    """Posición PIL de un punto a radio r en parámetro t ∈ [0,1]."""
+    angle = t * _math.pi / 2
+    if cw:
+        return (CX - r * _math.cos(angle), CY - r * _math.sin(angle))
+    else:
+        return (CX + r * _math.cos(angle), CY - r * _math.sin(angle))
+
+def _arc_tangent(t, cw=True):
+    """Dirección de avance (tangente) del arco en t, normalizada."""
+    angle = t * _math.pi / 2
+    if cw:
+        # d/dt (31 - r·cos(angle)) = r·sin·(π/2),  d/dt (31 - r·sin(angle)) = -r·cos·(π/2)
+        # normalizado: (sin, -cos)
+        return (_math.sin(angle), -_math.cos(angle))
+    else:
+        # d/dt (r·cos(angle)) = -r·sin·(π/2),  d/dt (31 - r·sin(angle)) = -r·cos·(π/2)
+        # normalizado: (-sin, -cos)
+        return (-_math.sin(angle), -_math.cos(angle))
+
+def _draw_belt_markings(img, CX, CY, frame, cw=True, N=8):
+    """
+    Replica el lenguaje visual de la cinta recta en el arco:
+      - Línea separadora de placa (ARROW_DK) radial — como las líneas oscuras verticales
+      - Chevron ">" rotado entre placas — como los de la cinta recta
+    2 placas por arco (= 2 placas por tile en cinta recta).
+    """
+    ARROW    = (140, 130, 50, 255)
+    ARROW_DK = (80,  72,  27, 255)
+    offset   = frame / N
+
+    def put(x, y, c=ARROW):
+        xi, yi = int(round(x)), int(round(y))
+        if 0 <= xi < S and 0 <= yi < S:
+            img.putpixel((xi, yi), c)
+
+    for i in range(2):                         # 2 placas por arco
+        t_sep  = ((i * 0.5) + offset) % 1.0   # separador de placa
+
+        # Línea radial oscura (de r=5 a r=26, zona de cinta)
+        for r in range(5, 27):
+            rx, ry = _arc_point(CX, CY, t_sep, r, cw)
+            put(rx, ry, ARROW_DK)
+
+        # Chevron en el centro de la placa (t_sep + 0.25)
+        t_chev = (t_sep + 0.25) % 1.0
+        cx, cy = _arc_point(CX, CY, t_chev, 14, cw)
+        tx, ty = _arc_tangent(t_chev, cw)
+        px, py = -ty, tx                       # perpendicular a la tangente
+
+        arm = 4
+        tip_x = cx + arm * tx
+        tip_y = cy + arm * ty
+        put(tip_x, tip_y)
+        for step in range(1, arm + 2):
+            s = float(step)
+            put(tip_x - s*tx + s*px, tip_y - s*ty + s*py)
+            put(tip_x - s*tx - s*px, tip_y - s*ty - s*py)
+
+def make_conveyor_corner_cw_frame(frame):
+    img = _corner_base(S-1, S-1)
+    _draw_belt_markings(img, S-1, S-1, frame, cw=True)
+    return img
+
+def make_conveyor_corner_ccw_frame(frame):
+    img = _corner_base(0, S-1)
+    _draw_belt_markings(img, 0, S-1, frame, cw=False)
+    return img
+
+
+# ── enemy — criatura hostil top-down, cuerpo rojo oscuro con ojos ────────────
+def make_enemy():
+    BODY    = (160,  30,  30, 255)   # rojo oscuro
+    BODY_DK = ( 90,  15,  15, 255)   # contorno
+    BODY_L  = (210,  60,  60, 255)   # reflejo
+    EYE     = (255, 220,  50, 255)   # ojos amarillos
+    EYE_DK  = (180, 140,  20, 255)   # pupila
+    SPIKE   = (120,  20,  20, 255)   # pinchos
 
     img = Image.new("RGBA", (S, S), TRANS)
-    d   = ImageDraw.Draw(img)
+    d = ImageDraw.Draw(img)
 
-    H = S // 2  # 16
-
-    # ── Brazo derecho (salida Este): mitad derecha del tile, altura completa ──
-    d.rectangle([H, 0, S-1, S-1],   fill=BASE)
-    d.rectangle([H, 0, S-1, 3],     fill=RAIL)   # riel superior
-    d.rectangle([H, 4, S-1, S-5],   fill=BELT)   # superficie
-    d.rectangle([H, S-4, S-1, S-1], fill=RAIL)   # riel inferior
-
-    # ── Brazo inferior (entrada N→sube): mitad inferior izquierda ─────────────
-    d.rectangle([0, H, H-1, S-1],   fill=BASE)
-    d.rectangle([0, H, 3, S-1],     fill=RAIL)   # riel izquierdo
-    d.rectangle([4, H, H-1, S-1],   fill=BELT)   # superficie
-    # (no hay riel derecho — conecta con el brazo derecho en x=H)
-
-    # ── Unión central (cuadrante inferior derecho) → superficie limpia ────────
-    d.rectangle([H, H, S-1, S-1], fill=BELT)
-
-    # ── Flecha: tramo vertical hacia arriba + curva + tramo horizontal ─────────
-    mx = H - 4  # centro del brazo vertical (x)
-    my = H + 4  # centro del brazo horizontal (y)
-    # tramo vertical (subiendo desde abajo)
-    for y in range(my + 2, S - 2):
-        for dx in range(2):
-            img.putpixel((mx + dx, y), ARROW)
-    # curva de conexión
-    for i in range(6):
-        for dxy in range(2):
-            x2 = mx + i + dxy
-            y2 = my - i + dxy
-            if 0 <= x2 < S and 0 <= y2 < S:
-                img.putpixel((x2, y2), ARROW)
-    # tramo horizontal (saliendo a la derecha)
-    for x in range(mx + 5, S - 2):
-        for dy in range(2):
-            img.putpixel((x, my - 5 + dy), ARROW)
+    # Sombra
+    d.ellipse([5, 9, 27, 27], fill=(0, 0, 0, 70))
+    # Cuerpo principal
+    d.ellipse([4, 4, 27, 27], fill=BODY, outline=BODY_DK, width=2)
+    # Reflejo (cuadrante superior izq)
+    d.ellipse([7, 7, 17, 17], fill=BODY_L)
+    # Ojos (dos puntos amarillos)
+    for ex, ey in [(10, 12), (20, 12)]:
+        d.ellipse([ex-3, ey-3, ex+3, ey+3], fill=EYE, outline=BODY_DK)
+        d.ellipse([ex-1, ey-1, ex+1, ey+1], fill=EYE_DK)
+    # Boca (arco oscuro)
+    d.arc([11, 17, 21, 24], start=10, end=170, fill=BODY_DK, width=2)
+    # Pinchos en los 4 diagonales
+    for sx, sy, ex2, ey2 in [(4,4,0,0), (27,4,31,0), (4,27,0,31), (27,27,31,31)]:
+        d.line([(sx, sy), (ex2, ey2)], fill=SPIKE, width=2)
 
     return img
 
-# ── conveyor_corner_ccw — giro izquierda, base: entrada N → salida W ─────────
-# Rotaciones: N→W (0°), W→S (-90°), S→E (180°), E→N (90°)
-def make_conveyor_corner_ccw():
-    TRANS = (0, 0, 0, 0)
-    BASE  = (55, 52, 48, 255)
-    RAIL  = (38, 36, 33, 255)
-    BELT  = (70, 66, 60, 255)
-    ARROW = (140, 130, 50, 255)
+# ── iron_ingot — lingote de hierro forjado, barra metálica plateada ───────────
+def make_iron_ingot():
+    METAL   = (160, 165, 175, 255)   # plateado base
+    METAL_L = (210, 215, 225, 255)   # cara superior iluminada
+    METAL_DK= ( 90,  92, 100, 255)   # cara frontal oscura
+    EDGE    = ( 55,  57,  65, 255)   # contorno
+    SHINE   = (240, 245, 255, 255)   # destello
 
     img = Image.new("RGBA", (S, S), TRANS)
-    d   = ImageDraw.Draw(img)
+    d = ImageDraw.Draw(img)
 
-    H = S // 2  # 16
-
-    # ── Brazo izquierdo (salida Oeste): mitad izquierda, altura completa ──────
-    d.rectangle([0, 0, H-1, S-1],   fill=BASE)
-    d.rectangle([0, 0, H-1, 3],     fill=RAIL)   # riel superior
-    d.rectangle([0, 4, H-1, S-5],   fill=BELT)   # superficie
-    d.rectangle([0, S-4, H-1, S-1], fill=RAIL)   # riel inferior
-
-    # ── Brazo inferior (entrada N→sube): mitad inferior derecha ───────────────
-    d.rectangle([H, H, S-1, S-1],   fill=BASE)
-    d.rectangle([S-4, H, S-1, S-1], fill=RAIL)   # riel derecho
-    d.rectangle([H, H, S-5, S-1],   fill=BELT)   # superficie
-
-    # ── Unión central (cuadrante inferior izquierdo) ──────────────────────────
-    d.rectangle([0, H, H-1, S-1], fill=BELT)
-
-    # ── Flecha: tramo vertical + curva + tramo horizontal ─────────────────────
-    mx = H + 4  # centro del brazo vertical (x)
-    my = H + 4  # centro del brazo horizontal (y)
-    for y in range(my + 2, S - 2):
-        for dx in range(2):
-            img.putpixel((mx - dx, y), ARROW)
-    for i in range(6):
-        for dxy in range(2):
-            x2 = mx - i - dxy
-            y2 = my - i + dxy
-            if 0 <= x2 < S and 0 <= y2 < S:
-                img.putpixel((x2, y2), ARROW)
-    for x in range(2, mx - 5):
-        for dy in range(2):
-            img.putpixel((x, my - 5 + dy), ARROW)
+    # Sombra
+    d.ellipse([6, 22, 26, 29], fill=(0, 0, 0, 60))
+    # Cara frontal (trapecio que da sensación 3D)
+    d.polygon([(4,14),(28,14),(26,26),(6,26)], fill=METAL_DK, outline=EDGE)
+    # Cara superior (perspectiva isométrica leve)
+    d.polygon([(4,14),(28,14),(30,8),(6,8)], fill=METAL_L, outline=EDGE)
+    # Cara lateral derecha
+    d.polygon([(28,14),(30,8),(30,22),(28,26)], fill=METAL, outline=EDGE)
+    # Borde superior
+    d.line([(6,8),(30,8)], fill=EDGE, width=1)
+    # Destello en esquina superior izquierda de la cara superior
+    for dx2, dy2 in [(8,9),(9,9),(8,10)]:
+        img.putpixel((dx2, dy2), SHINE)
 
     return img
 
@@ -381,11 +438,14 @@ print("Generando sprites procedurales en assets/raw/:")
 save(make_floor_tile(),          "floor_tile.png")
 save(make_wall_tile(),           "wall_tile.png")
 save(make_conveyor_belt_idle(),  "conveyor_belt_idle.png")
-save(make_conveyor_corner_cw(),  "conveyor_corner_cw.png")
-save(make_conveyor_corner_ccw(), "conveyor_corner_ccw.png")
+for f in range(8):
+    save(make_conveyor_corner_cw_frame(f),  f"conveyor_corner_cw_{f}.png")
+    save(make_conveyor_corner_ccw_frame(f), f"conveyor_corner_ccw_{f}.png")
 save(make_player(),              "player.png")
 save(make_item_box(),            "item_box.png")
 save(make_item(),                "item.png")
+save(make_enemy(),               "enemy.png")
+save(make_iron_ingot(),          "iron_ingot.png")
 for i, fn in enumerate([make_drill_0, make_drill_1, make_drill_2, make_drill_3,
                          make_drill_4, make_drill_5, make_drill_6, make_drill_7]):
     save(fn(), f"drill_{i}.png")

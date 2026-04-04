@@ -2,6 +2,7 @@
 #include <entt/entt.hpp>
 #include "components.hpp"
 #include "placement_grid.hpp"
+#include "audio.hpp"
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -19,7 +20,8 @@ static constexpr float BELT_DVY[] = { 0.f, -1.f,  0.f,  1.f };
 // Accumulates collected items into inventory by type.
 inline void item_system(entt::registry& reg, float dt,
                         std::map<std::string, int>& inventory,
-                        const PlacementGrid& grid) {
+                        const PlacementGrid& grid,
+                        Audio& audio) {
     std::vector<entt::entity> to_destroy;
 
     auto view = reg.view<components::Transform,
@@ -54,6 +56,14 @@ inline void item_system(entt::registry& reg, float dt,
             if (tile_e != entt::null && reg.all_of<components::BoxTag>(tile_e)) {
                 to_destroy.push_back(entity);
                 inventory[item.item_type] += item.quantity;
+                audio.play("item_pickup");
+                continue;
+            }
+            // ── Máquina: depositar en buffer de entrada ───────────────────
+            if (tile_e != entt::null && reg.all_of<components::MachineTag>(tile_e)) {
+                auto& machine = reg.get<components::MachineTag>(tile_e);
+                machine.input_buf[item.item_type] += item.quantity;
+                to_destroy.push_back(entity);
                 continue;
             }
 
@@ -82,6 +92,7 @@ inline void item_system(entt::registry& reg, float dt,
             if (ddx*ddx + ddy*ddy <= 0.25f) {
                 to_destroy.push_back(entity);
                 inventory[item.item_type] += item.quantity;
+                audio.play("item_pickup");
             }
         }
     }

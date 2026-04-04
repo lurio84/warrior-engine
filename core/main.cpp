@@ -1,4 +1,4 @@
-// The Warrior's Way Engine — Phase 13: Pure C++ gameplay (no Lua)
+// The Warrior's Way Engine — Phase 14
 
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
@@ -16,6 +16,7 @@
 #include "tilemap.hpp"
 #include "placement_grid.hpp"
 #include "game_scene.hpp"
+#include "save_load.hpp"
 
 #include "drill_system.hpp"
 #include "item_system.hpp"
@@ -24,10 +25,13 @@
 #include "player_system.hpp"
 #include "camera_system.hpp"
 #include "placement_system.hpp"
-#include "placement_grid.hpp"
+#include "wave_system.hpp"
+#include "enemy_system.hpp"
+#include "combat_system.hpp"
 
 #include <iostream>
 #include <cstdlib>
+#include <ctime>
 #include <string>
 
 // ── Fixed-timestep constants ──────────────────────────────────────────────────
@@ -92,9 +96,12 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
+    std::srand(static_cast<unsigned>(std::time(nullptr)));
+
     std::cout << "OpenGL " << glGetString(GL_VERSION)
               << "  |  " << glGetString(GL_RENDERER) << "\n"
-              << "Controles: flechas=pan  +/-=zoom  0=reset  F1=debug  ESC=salir\n";
+              << "Controles: flechas=pan  +/-=zoom  0=reset  F1=debug  ESC=salir\n"
+              << "           WASD=mover  Space=atacar  F5=guardar  F9=cargar\n";
 
     SDL_GL_SetSwapInterval(1);
     glClearColor(0.05f, 0.05f, 0.08f, 1.f);
@@ -131,6 +138,7 @@ int main(int argc, char* argv[]) {
     Camera cam;
     PlacementGrid grid;
     BuildState build;
+    WaveState ws;
 
     // ── Scene init (replaces main.lua) ────────────────────────────────────────
     SceneState scene = init_scene(reg, tilemap, cam, grid, base_dir);
@@ -175,6 +183,14 @@ int main(int argc, char* argv[]) {
                     switch (event.key.keysym.sym) {
                         case SDLK_ESCAPE: running = false;       break;
                         case SDLK_F1:     debug_ui.toggle();     break;
+                        case SDLK_F5:
+                            save_game(base_dir + "savegame.json",
+                                      scene.inventory, ws, reg);
+                            break;
+                        case SDLK_F9:
+                            load_game(base_dir + "savegame.json",
+                                      scene.inventory, ws, reg);
+                            break;
                         case SDLK_LEFT:   cam.x  -= 1.f;        break;
                         case SDLK_RIGHT:  cam.x  += 1.f;        break;
                         case SDLK_UP:     cam.y  += 1.f;        break;
@@ -206,8 +222,9 @@ int main(int argc, char* argv[]) {
         // ── Input snapshot ────────────────────────────────────────────────────
         input.update();
 
-        // ── Placement (una vez por frame, fuera del tick fijo) ────────────────
+        // ── Per-frame systems (input-driven, outside fixed timestep) ──────────
         placement_system(reg, grid, cam, input, build, vp_w, vp_h);
+        combat_system(reg, input);
 
         // ── Fixed-timestep logic at 50 Hz ─────────────────────────────────────
         uint64_t now   = SDL_GetTicks64();
@@ -219,21 +236,28 @@ int main(int argc, char* argv[]) {
         while (accumulator >= TICK_SECONDS) {
             float dt = static_cast<float>(TICK_SECONDS);
 
-            // ── Gameplay systems (order matters — see SYSTEMS_REGISTRY.md) ────
+            // ── Gameplay systems (order matters) ──────────────────────────────
             player_system(reg, input);
-            conveyor_system(reg, dt);
+            enemy_system(reg, dt);
+            wave_system(reg, grid, ws, dt,
+                        tilemap.width(), tilemap.height());
+            conveyor_system(reg, static_cast<float>(total_time));
             drill_system(reg, dt);
-            item_system(reg, dt, scene.inventory, grid);
-            // machine_system(reg, dt);  // stub — no processors yet
+            item_system(reg, dt, scene.inventory, grid, audio);
+            machine_system(reg, dt, grid);
 
             // ── Physics: apply velocity → position ───────────────────────────
             for (auto [e, tf, v] : reg.view<components::Transform,
                                             components::Velocity>().each()) {
-                if (!reg.all_of<components::PlayerTag>(e)) {
+                // Player and enemies use axis-separated solid-tile collision.
+                // Other moving entities (items) pass through freely.
+                bool needs_collision = reg.all_of<components::PlayerTag>(e)
+                                    || reg.all_of<components::EnemyTag>(e);
+                if (!needs_collision) {
                     tf.x += v.vx * dt;
                     tf.y += v.vy * dt;
                 } else {
-                    // Jugador: colisión por eje (permite deslizamiento)
+                    // Colisión por eje (permite deslizamiento en esquinas)
                     constexpr float HALF = 0.42f;
                     auto solid = [&](float px, float py) {
                         int corners[4][2] = {
@@ -269,9 +293,15 @@ int main(int argc, char* argv[]) {
         renderer.draw_tilemap(tilemap);
         renderer.draw_registry(reg);
 
+        // Collect player HP for HUD
+        float hud_hp = 10.f, hud_max_hp = 10.f;
+        for (auto [e, ph] : reg.view<components::PlayerHealth>().each()) {
+            hud_hp = ph.hp; hud_max_hp = ph.max_hp; break;
+        }
+
         debug_ui.begin_frame();
         debug_ui.draw(reg, cam, audio, fps, total_time, net.stats());
-        debug_ui.draw_hud(scene.inventory);
+        debug_ui.draw_hud(scene.inventory, hud_hp, hud_max_hp, ws.wave);
         debug_ui.end_frame();
 
         SDL_GL_SwapWindow(window);

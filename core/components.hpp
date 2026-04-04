@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <cstdint>
+#include <map>
 
 // ECS component definitions — The Warrior's Way Engine
 // Coordinates: tile integers (world), pixels only in renderer
@@ -83,15 +84,37 @@ struct ItemTag {
 // ── MachineTag ────────────────────────────────────────────────────────────────
 // Marks a processor machine. Owned by machine_system.
 struct MachineTag {
-    std::string type;
-    float       progress  = 0.f;
-    std::string recipe_id;
+    std::string recipe_id   = "forge";    // qué receta procesa
+    int         out_dir     = 0;          // dirección de salida (0=E,1=S,2=W,3=N)
+    float       progress    = 0.f;        // ticks acumulados de la receta actual
+    bool        processing  = false;      // true mientras está procesando
+    bool        output_ready = false;     // true cuando el output está listo para spawnar
+    std::map<std::string, int> input_buf; // items acumulados en el buffer de entrada
 };
 
 // ── PlayerTag ─────────────────────────────────────────────────────────────────
 // Marks the local player entity. Owned by player_system.
 struct PlayerTag {
-    float speed = 5.0f;
+    float speed     = 5.0f;
+    float attack_cd = 0.f;   // seconds until next melee swing
+};
+
+// ── PlayerHealth ──────────────────────────────────────────────────────────────
+// Player hit points. Owned by enemy_system (damage) and combat_system.
+struct PlayerHealth {
+    float hp      = 10.f;
+    float max_hp  = 10.f;
+    float inv_t   = 0.f;   // invincibility seconds after being hit
+};
+
+// ── EnemyTag ──────────────────────────────────────────────────────────────────
+// Marks a hostile enemy entity. Owned by enemy_system + combat_system.
+struct EnemyTag {
+    float hp          = 3.f;
+    float max_hp      = 3.f;
+    float speed       = 2.5f;
+    float contact_dmg = 1.f;
+    float dmg_cd      = 0.f;   // cooldown before applying contact damage again
 };
 
 // ── BoxTag ────────────────────────────────────────────────────────────────────

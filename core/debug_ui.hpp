@@ -21,7 +21,8 @@ public:
     void begin_frame();
     void draw(entt::registry& reg, Camera& cam, Audio& audio,
               float fps, double total_time, const NetStats& net);
-    void draw_hud(const std::map<std::string, int>& inventory);
+    void draw_hud(const std::map<std::string, int>& inventory,
+                  float hp, float max_hp, int wave);
     void end_frame();
 
     bool visible = false;

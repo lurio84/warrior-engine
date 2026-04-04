@@ -70,10 +70,10 @@ inline BeltVisual belt_visual_for(int in_dir, int out_dir) {
     // Filas = in_dir (0=E,1=S,2=W,3=N), columnas = out_dir
     static const Corner TABLE[4][4] = {
         //         out=E                              out=S                            out=W                               out=N
-        /* in=E */ {{},                              {"conveyor_corner_cw",-1.5708f}, {},                                {"conveyor_corner_ccw",-1.5708f}},
-        /* in=S */ {{"conveyor_corner_ccw",3.14159f},{},                              {"conveyor_corner_cw", 3.14159f},  {}},
-        /* in=W */ {{},                              {"conveyor_corner_ccw",1.5708f}, {},                                {"conveyor_corner_cw", 1.5708f}},
-        /* in=N */ {{"conveyor_corner_cw", 0.f},    {},                              {"conveyor_corner_ccw",0.f},        {}},
+        /* in=E */ {{},                                {"conveyor_corner_cw_0",-1.5708f}, {},                                  {"conveyor_corner_ccw_0",-1.5708f}},
+        /* in=S */ {{"conveyor_corner_ccw_0",3.14159f},{},                              {"conveyor_corner_cw_0", 3.14159f},  {}},
+        /* in=W */ {{},                                {"conveyor_corner_ccw_0",1.5708f}, {},                                  {"conveyor_corner_cw_0", 1.5708f}},
+        /* in=N */ {{"conveyor_corner_cw_0", 0.f},    {},                              {"conveyor_corner_ccw_0",0.f},        {}},
     };
 
     const auto& c = TABLE[in_dir][out_dir];
