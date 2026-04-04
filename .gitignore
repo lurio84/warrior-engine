@@ -5,3 +5,5 @@ imgui.ini
 *.o
 *.a
 *.so
+.claude/
+savegame.json
